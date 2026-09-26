@@ -14,6 +14,9 @@ dependencies = [
     "pydantic-settings==2.15.0",
     "email-validator==2.3.0",  # enables EmailStr validation in config
     "httpx==0.28.1",
+    "SQLAlchemy==2.1.1",
+    "alembic==1.20.0",
+    "psycopg[binary]==3.3.6",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +47,10 @@ select = [
     "SIM", # simplify
     "PTH", # prefer pathlib over os.path
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic writes these from its own template; style rules do not apply.
+"migrations/versions/*" = ["UP", "I", "E501"]
 
 # ---------------------------------------------------------------------------
 # pytest

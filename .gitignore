@@ -12,6 +12,11 @@
 # The application creates this directory at startup.
 data/
 
+# ---- Local PostgreSQL ----------------------------------------------------
+# Portable server binaries and data directory, created by
+# scripts/setup_postgres.py. Large, machine-specific and re-creatable.
+.pgsql/
+
 # ---- Python --------------------------------------------------------------
 .venv/
 venv/

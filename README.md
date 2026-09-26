@@ -12,15 +12,15 @@ Background research, the regulatory framework and the full build plan are in
 
 ## Status
 
-**Milestone 2 of 6 — Fetch & archive.** Documents can be downloaded and
-archived. Nothing is parsed or published yet.
+**Milestone 3 of 6 — Database.** Documents are downloaded, archived and
+recorded in PostgreSQL. Nothing is parsed or published yet.
 
 | # | Milestone | State |
 |---|-----------|-------|
 | 1 | Foundation — repo, config, tests | **done** |
 | 2 | Fetch & archive one source | **done** |
-| 3 | Database | next |
-| 4 | First real source adapter | |
+| 3 | Database | **done** |
+| 4 | First real source adapter | next |
 | 5 | Search UI | |
 | 6 | Scheduling, second source, deploy | |
 
@@ -41,11 +41,34 @@ python -m venv .venv
 Copy-Item .env.example .env
 #    then edit .env and set CONTACT_EMAIL and CONTACT_URL
 
-# 4. Confirm everything works
+# 4. Set up a project-local PostgreSQL server
+.\.venv\Scripts\python.exe scripts\setup_postgres.py
+
+# 5. Apply the database schema
+.\.venv\Scripts\python.exe -m alembic upgrade head
+
+# 6. Confirm everything works
 .\.venv\Scripts\python.exe -m pytest
 ```
 
 On macOS or Linux, replace `.\.venv\Scripts\python.exe` with `.venv/bin/python`.
+
+### The local database
+
+`scripts/setup_postgres.py` downloads the official PostgreSQL portable
+binaries into `.pgsql/` and runs a server on **port 5433**. No administrator
+rights, no Windows service, and nothing that can collide with another
+PostgreSQL on the machine. Everything it creates is git-ignored.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\setup_postgres.py --status
+.\.venv\Scripts\python.exe scripts\setup_postgres.py --start
+.\.venv\Scripts\python.exe scripts\setup_postgres.py --stop
+.\.venv\Scripts\python.exe scripts\setup_postgres.py --reset   # delete it all
+```
+
+The server does not start automatically when Windows boots. Run `--start`
+after a reboot.
 
 ---
 
@@ -54,6 +77,9 @@ On macOS or Linux, replace `.\.venv\Scripts\python.exe` with `.venv/bin/python`.
 ```powershell
 # Show the loaded configuration
 .\.venv\Scripts\python.exe -m auction_portal config
+
+# Check the database connection and migration state
+.\.venv\Scripts\python.exe -m auction_portal db
 
 # Fetch and archive a document
 .\.venv\Scripts\python.exe -m auction_portal fetch <url> --source-id hdfc_web
@@ -74,7 +100,7 @@ OCR costs down.
 src/auction_portal/
     config.py          Settings, loaded and validated from .env
     logging_setup.py   Logging configuration
-    archiver.py        Fetch -> detect change -> archive
+    archiver.py        Fetch -> detect change -> archive -> record
     cli.py             Command line interface
     fetching/
         models.py      RawDocument, FetchResult
@@ -83,12 +109,30 @@ src/auction_portal/
         client.py      HTTP client: retries, backoff, conditional GET
     storage/
         raw_store.py   Immutable content-addressed archive
-        url_state.py   Per-URL state (moves to Postgres in Milestone 3)
+    db/
+        models.py      Tables: source_documents, url_state
+        session.py     Engine and transaction handling
+        repository.py  Database reads and writes
     sources/           One adapter per data source (Milestone 4)
+migrations/            Alembic schema migrations
+scripts/               setup_postgres.py
 tests/                 Test suite
 docs/                  Research and build plan
 data/                  Downloaded documents (git-ignored, created at runtime)
+.pgsql/                Local PostgreSQL server (git-ignored)
 ```
+
+### Changing the schema
+
+Never edit a table by hand. Change the models, then:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic revision --autogenerate -m "what changed"
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+The generated migration is committed to git, so every environment applies
+the same change in the same order.
 
 ---
 

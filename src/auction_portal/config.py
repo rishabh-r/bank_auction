@@ -44,6 +44,17 @@ class Settings(BaseSettings):
     crawler_max_retries: int = Field(default=3, ge=0, le=10)
     crawler_respect_robots: bool = True
 
+    # --- Database ---------------------------------------------------------
+    # Contains a password, so it is handled as a secret.
+    database_url: SecretStr = SecretStr(
+        "postgresql+psycopg://postgres:devpassword@localhost:5433/auction_portal"
+    )
+    # Used only by the test suite, which wipes it between runs.
+    test_database_url: SecretStr = SecretStr(
+        "postgresql+psycopg://postgres:devpassword@localhost:5433/auction_portal_test"
+    )
+    db_echo: bool = False  # set true to log every SQL statement
+
     # --- API keys ---------------------------------------------------------
     # SecretStr keeps the value out of logs, tracebacks and repr() output.
     # Read it deliberately with .get_secret_value(); it cannot leak by accident.
@@ -55,6 +66,17 @@ class Settings(BaseSettings):
     def _blank_is_unset(cls, value: object) -> object:
         """Treat `OPENAI_API_KEY=` in .env as absent rather than an empty key."""
         return None if value in ("", None) else value
+
+    @property
+    def safe_database_url(self) -> str:
+        """Connection string with the password masked, for logs and CLI output."""
+        url = self.database_url.get_secret_value()
+        if "://" in url and "@" in url:
+            scheme, rest = url.split("://", 1)
+            credentials, host = rest.rsplit("@", 1)
+            user = credentials.split(":", 1)[0]
+            return f"{scheme}://{user}:***@{host}"
+        return url
 
     @property
     def raw_dir(self) -> Path:

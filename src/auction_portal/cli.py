@@ -8,8 +8,12 @@ python -m auction_portal config
 import argparse
 import sys
 
+from sqlalchemy import text
+
 from auction_portal.archiver import Archiver
 from auction_portal.config import get_settings
+from auction_portal.db.repository import DocumentRepository
+from auction_portal.db.session import session_scope
 from auction_portal.fetching.models import FetchOutcome
 from auction_portal.logging_setup import configure_logging
 
@@ -49,12 +53,66 @@ def _cmd_stats(args: argparse.Namespace) -> int:
     settings = get_settings()
     settings.ensure_directories()
 
-    with Archiver(settings) as archiver:
+    with session_scope() as session:
+        repo = DocumentRepository(session)
+        per_source = repo.documents_per_source()
+        recent = repo.recent_documents(limit=5)
+
         print()
         print(f"  archive      : {settings.raw_dir}")
-        print(f"  documents    : {archiver.store.count():,}")
-        print(f"  urls tracked : {len(archiver.state):,}")
+        print(f"  database     : {settings.safe_database_url}")
+        print(f"  documents    : {repo.count_documents():,}")
+        print(f"  urls tracked : {repo.count_urls():,}")
+
+        if per_source:
+            print()
+            print("  by source:")
+            for source_id, count in per_source.items():
+                print(f"    {source_id:<20} {count:>6,}")
+
+        if recent:
+            print()
+            print("  most recent:")
+            for doc in recent:
+                print(
+                    f"    {doc.fetched_at:%Y-%m-%d %H:%M}  {doc.source_id:<12} "
+                    f"{doc.content_sha256[:12]}  {doc.source_url[:58]}"
+                )
         print()
+    return 0
+
+
+def _cmd_db(args: argparse.Namespace) -> int:
+    """Check database connectivity and migration state."""
+    settings = get_settings()
+    try:
+        with session_scope() as session:
+            version = session.execute(text("SELECT version()")).scalar_one()
+            revision = session.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one_or_none()
+            tables = session.execute(
+                text(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'public' ORDER BY table_name"
+                )
+            ).scalars()
+
+            print()
+            print(f"  url       : {settings.safe_database_url}")
+            print(f"  server    : {version.split(',')[0]}")
+            print(f"  migration : {revision or 'none applied'}")
+            print(f"  tables    : {', '.join(tables)}")
+            print()
+    except Exception as exc:
+        print()
+        print(f"  cannot connect: {type(exc).__name__}: {exc}")
+        print()
+        print("  Is the local server running?")
+        print("    python scripts/setup_postgres.py --status")
+        print("    python scripts/setup_postgres.py --start")
+        print()
+        return 1
     return 0
 
 
@@ -63,6 +121,7 @@ def _cmd_config(args: argparse.Namespace) -> int:
     print()
     print(f"  environment    : {s.environment}")
     print(f"  data dir       : {s.data_dir}")
+    print(f"  database       : {s.safe_database_url}")
     print(f"  crawl delay    : {s.crawler_delay_seconds}s")
     print(f"  timeout        : {s.crawler_timeout_seconds}s")
     print(f"  max retries    : {s.crawler_max_retries}")
@@ -95,6 +154,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     config = sub.add_parser("config", help="show loaded configuration")
     config.set_defaults(func=_cmd_config)
+
+    db = sub.add_parser("db", help="check database connectivity and migrations")
+    db.set_defaults(func=_cmd_db)
 
     return parser
 
