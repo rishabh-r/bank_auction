@@ -29,6 +29,7 @@ from decimal import Decimal
 from auction_portal.fetching.models import RawDocument
 from auction_portal.normalise.area import canonical_unit, to_square_feet
 from auction_portal.normalise.dates import parse_date, parse_iso_utc
+from auction_portal.normalise.geo import resolve_coordinates
 from auction_portal.normalise.money import emd_ratio, is_plausible_price, parse_inr
 from auction_portal.normalise.text import (
     clean_text,
@@ -43,10 +44,6 @@ log = logging.getLogger(__name__)
 
 _SITEMAP_LOC = re.compile(r"<loc>(.*?)</loc>", re.DOTALL)
 _DETAIL_ID = re.compile(r"/property-detail/(\d+)/([0-9a-f]+)")
-
-# India's bounding box, used to sanity-check (and un-swap) coordinates.
-_LAT_RANGE = (Decimal("6"), Decimal("38"))
-_LON_RANGE = (Decimal("67"), Decimal("98"))
 
 
 class BaanknetAdapter(SourceAdapter):
@@ -211,33 +208,19 @@ class BaanknetAdapter(SourceAdapter):
             prop.get("address")
         )
 
-        latitude = _to_decimal(prop.get("latitude"))
-        longitude = _to_decimal(prop.get("longitude"))
-        listing.latitude, listing.longitude = self._fix_coordinates(latitude, longitude, listing)
-
-    @staticmethod
-    def _fix_coordinates(
-        latitude: Decimal | None, longitude: Decimal | None, listing: ParsedListing
-    ) -> tuple[Decimal | None, Decimal | None]:
-        """Correct BAANKNET's transposed coordinates.
-
-        A wrongly placed pin on a multi-crore property is worse than no pin,
-        so anything that is not clearly inside India is discarded.
-        """
-        if latitude is None or longitude is None:
-            return None, None
-
-        def in_india(lat: Decimal, lon: Decimal) -> bool:
-            return _LAT_RANGE[0] <= lat <= _LAT_RANGE[1] and _LON_RANGE[0] <= lon <= _LON_RANGE[1]
-
-        if in_india(latitude, longitude):
-            return latitude, longitude
-        if in_india(longitude, latitude):
-            listing.flag("coordinates_transposed")
-            return longitude, latitude
-
-        listing.flag("coordinates_out_of_range")
-        return None, None
+        # Validated against the claimed state, not merely against India:
+        # an Azamgarh (Uttar Pradesh) property was published at
+        # 14.64 N, 71.70 E, which is inside India's bounding box but sits
+        # in the Arabian Sea.
+        latitude, longitude, flag = resolve_coordinates(
+            _to_decimal(prop.get("latitude")),
+            _to_decimal(prop.get("longitude")),
+            listing.state,
+        )
+        listing.latitude = latitude
+        listing.longitude = longitude
+        if flag:
+            listing.flag(flag)
 
     def _apply_money(self, listing: ParsedListing, prop: dict, auction: dict) -> None:
         listing.reserve_price = parse_inr(auction.get("reservePrice") or prop.get("propertyPrice"))

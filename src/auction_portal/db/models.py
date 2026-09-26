@@ -16,6 +16,7 @@ from decimal import Decimal
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Computed,
     Date,
     DateTime,
     ForeignKey,
@@ -27,7 +28,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -204,6 +205,22 @@ class Listing(Base):
     is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     raw_payload: Mapped[dict | None] = mapped_column(JSONB)
 
+    # Maintained by PostgreSQL on every insert and update, so there is no
+    # sync code that can drift. Weights rank a title match above a match
+    # buried in the address.
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "setweight(to_tsvector('simple', coalesce(title, '')), 'A') || "
+            "setweight(to_tsvector('simple', coalesce(city, '')), 'B') || "
+            "setweight(to_tsvector('simple', coalesce(locality, '')), 'B') || "
+            "setweight(to_tsvector('simple', coalesce(state, '')), 'B') || "
+            "setweight(to_tsvector('simple', coalesce(bank_name, '')), 'C') || "
+            "setweight(to_tsvector('simple', coalesce(address, '')), 'D')",
+            persisted=True,
+        ),
+    )
+
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     first_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -225,6 +242,7 @@ class Listing(Base):
         ),
         Index("ix_listing_geo", "state", "city", "asset_type"),
         Index("ix_listing_bank", "bank_name"),
+        Index("ix_listing_search", "search_vector", postgresql_using="gin"),
     )
 
     def __repr__(self) -> str:

@@ -12,8 +12,9 @@ Background research, the regulatory framework and the full build plan are in
 
 ## Status
 
-**Milestone 4 of 6 — First source adapter.** Real auction listings from
-BAANKNET are collected, normalised and stored. No web interface yet.
+**Milestone 5 of 6 — Search interface.** A working portal: search, filter
+by bank, state, city, property type, possession and price, with a detail
+page for every listing. Not yet scheduled or deployed.
 
 | # | Milestone | State |
 |---|-----------|-------|
@@ -21,8 +22,10 @@ BAANKNET are collected, normalised and stored. No web interface yet.
 | 2 | Fetch & archive one source | **done** |
 | 3 | Database | **done** |
 | 4 | First real source adapter | **done** |
-| 5 | Search UI | next |
-| 6 | Scheduling, second source, deploy | |
+| 5 | Search UI | **done** |
+| 6 | Scheduling, second source, deploy | next |
+
+![Search page](docs/screenshots/search.png)
 
 ## Sources
 
@@ -92,6 +95,9 @@ after a reboot.
 ## Usage
 
 ```powershell
+# Run the portal, then open http://127.0.0.1:8000
+.\.venv\Scripts\python.exe -m auction_portal serve
+
 # Show the loaded configuration
 .\.venv\Scripts\python.exe -m auction_portal config
 
@@ -132,6 +138,28 @@ bank had uploaded a reserve price of Rs 1.
 
 Use `--all` to see withheld listings and the flags that withheld them.
 
+### The portal
+
+Pages are server-rendered rather than a single-page app. Most traffic to a
+portal like this arrives from people searching "SBI auction property Pune",
+so complete HTML on the first response — indexable, fast, working without
+JavaScript — matters more than client-side interactivity.
+
+A JSON API is available at `/api/listings`, documented at `/api/docs`.
+
+What every page guarantees, and what the tests enforce:
+
+- **No borrower or guarantor names.** They add nothing for a buyer, and
+  publishing someone's default is a real harm. The names are not stored on
+  the listing at all, so no template change can leak them.
+- **A link to the original notice** on every listing, plus when it was
+  first seen and last verified.
+- **A disclaimer** on every page, and a clear statement that we are not a
+  bank, run no auctions and handle no EMD payments.
+- **A warning on symbolic possession**, because the buyer may inherit an
+  eviction, and on DRT or IBC sales, because a different legal process
+  applies.
+
 ---
 
 ## Layout
@@ -147,7 +175,13 @@ src/auction_portal/
         money.py       Indian rupee amounts (lakh/crore, 2-2-3 grouping)
         dates.py       Day-first Indian dates, IST handling
         area.py        sqft/sqyd/acre/hectare/guntha conversion
+        geo.py         Coordinate validation against state bounding boxes
         text.py        Whitespace, mojibake, PIN codes, phone numbers
+    search.py          Filters, facets, sorting, pagination
+    web/
+        app.py         FastAPI: HTML pages and JSON API
+        templates/     Server-rendered pages
+        static/        Stylesheet
     fetching/
         models.py      RawDocument, FetchResult
         robots.py      robots.txt compliance

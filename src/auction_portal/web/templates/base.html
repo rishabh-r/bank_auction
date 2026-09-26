@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Bank Auction Properties in India{% endblock %}</title>
+  <meta name="description" content="{% block description %}Search bank auction properties across India in one place. Reserve price, EMD, auction dates and possession status.{% endblock %}">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark">AP</span>
+        <span>
+          <strong>Auction Portal</strong>
+          <small>Bank auction properties across India</small>
+        </span>
+      </a>
+      {% if totals %}
+      <div class="header-stats">
+        <span><b>{{ "{:,}".format(totals.listings) }}</b> listings</span>
+        <span><b>{{ totals.states }}</b> states</span>
+        <span><b>{{ totals.banks }}</b> banks</span>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+
+  {% block content %}{% endblock %}
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p class="disclaimer"><strong>Important.</strong> {{ disclaimer }}</p>
+      <p class="fine">
+        Not affiliated with any bank. We do not conduct auctions, register
+        bidders or handle EMD payments. Every listing links to the original
+        public notice.
+        <a href="/api/docs">API</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

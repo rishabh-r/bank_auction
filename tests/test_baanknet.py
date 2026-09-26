@@ -105,8 +105,8 @@ def test_parses_the_tiruppur_property():
 def test_transposed_coordinates_are_corrected():
     """BAANKNET reports Tiruppur as lat 77.58 / lon 11.28; it is the reverse.
 
-    A pin two hundred kilometres out is worse than no pin at all, so this
-    is detected and fixed rather than trusted.
+    Swapping them puts the pin inside Tamil Nadu, so the transposition is
+    detected and corrected rather than trusted.
     """
     listing = parse_one("property_tiruppur_transposed_coords")
 

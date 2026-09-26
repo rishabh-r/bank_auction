@@ -17,6 +17,9 @@ dependencies = [
     "SQLAlchemy==2.1.1",
     "alembic==1.20.0",
     "psycopg[binary]==3.3.6",
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.54.0",
+    "Jinja2==3.1.6",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +30,11 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# Templates and CSS must ship with the installed package, not just exist
+# in the source tree.
+auction_portal = ["web/templates/*.html", "web/static/*"]
 
 # ---------------------------------------------------------------------------
 # ruff: linter + formatter. Replaces black, isort and flake8 with one tool.

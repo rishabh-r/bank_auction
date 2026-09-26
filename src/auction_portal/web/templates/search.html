@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}
+{%- if query.city %}Bank auction properties in {{ query.city }}
+{%- elif query.state %}Bank auction properties in {{ query.state }}
+{%- else %}Bank Auction Properties in India{% endif %} | Auction Portal
+{%- endblock %}
+
+{% macro facet_link(name, value, label, count) %}
+  {% set active = query_value(name) == value %}
+  <a class="facet {% if active %}is-active{% endif %}"
+     href="?{{ build_query(name, none if active else value) }}">
+    <span>{{ label }}</span><span class="count">{{ count }}</span>
+  </a>
+{% endmacro %}
+
+{% block content %}
+<section class="hero">
+  <div class="wrap">
+    <h1>Every bank auction property in one search</h1>
+    <p class="lede">
+      Properties being sold by banks under the SARFAESI Act, collected from
+      public sources and linked back to the original notice.
+    </p>
+
+    <form class="searchbar" method="get" action="/">
+      <input type="search" name="q" value="{{ query.text or '' }}"
+             placeholder="Search by city, locality, bank or address…"
+             aria-label="Search listings">
+      {% for key, value in params.items() if key != 'q' %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+      {% endfor %}
+      <button type="submit">Search</button>
+    </form>
+  </div>
+</section>
+
+<main class="wrap layout">
+  <aside class="filters">
+    <form method="get" action="/" class="price-filter">
+      {% for key, value in params.items() if key not in ('min_price', 'max_price') %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+      {% endfor %}
+      <h3>Reserve price</h3>
+      <div class="price-row">
+        <input type="text" name="min_price" inputmode="numeric"
+               value="{{ query.min_price|int if query.min_price else '' }}"
+               placeholder="Min" aria-label="Minimum price">
+        <input type="text" name="max_price" inputmode="numeric"
+               value="{{ query.max_price|int if query.max_price else '' }}"
+               placeholder="Max" aria-label="Maximum price">
+      </div>
+      <button type="submit" class="ghost">Apply</button>
+    </form>
+
+    {% for group, title in [
+        ('state', 'State'), ('city', 'City'), ('asset_type', 'Property type'),
+        ('bank', 'Bank'), ('possession', 'Possession'), ('status', 'Status')] %}
+      {% if results.facets.get(group) %}
+      <div class="filter-group">
+        <h3>{{ title }}</h3>
+        {% for facet in results.facets[group] %}
+          {{ facet_link(group, facet.value, facet.value, facet.count) }}
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+  </aside>
+
+  <section class="results">
+    <div class="results-head">
+      <p class="count">
+        {% if results.total %}
+          <strong>{{ "{:,}".format(results.total) }}</strong> listings
+          <span class="muted">showing {{ results.first_index }}–{{ results.last_index }}</span>
+        {% else %}
+          <strong>No listings match</strong>
+        {% endif %}
+      </p>
+
+      <form method="get" action="/" class="sortbar">
+        {% for key, value in params.items() if key != 'sort' %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}">
+        {% endfor %}
+        <label for="sort">Sort</label>
+        <select name="sort" id="sort" onchange="this.form.submit()">
+          {% for value, label in sort_labels.items() %}
+            <option value="{{ value }}" {% if query.sort == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    {% if query.active_filters() %}
+    <div class="chips">
+      {% for key, label in query.active_filters().items() %}
+        <a class="chip" href="?{{ build_query(key, none) }}">{{ label }} <span>&times;</span></a>
+      {% endfor %}
+      <a class="chip chip-clear" href="/">Clear all</a>
+    </div>
+    {% endif %}
+
+    {% if not results.listings %}
+      <div class="empty">
+        <p>Nothing matches those filters.</p>
+        <p class="muted">Try removing a filter, or <a href="/">start again</a>.</p>
+      </div>
+    {% endif %}
+
+    <ul class="cards">
+      {% for listing in results.listings %}
+      <li class="card">
+        <a class="card-link" href="/listing/{{ listing.id }}">
+          <div class="card-head">
+            <h2>{{ listing.title or 'Property' }}</h2>
+            <span class="status status-{{ listing.status }}">{{ listing.status }}</span>
+          </div>
+
+          <p class="where">
+            {{ [listing.locality, listing.city, listing.state] | select | join(', ') }}
+            {%- if listing.pincode %} &middot; {{ listing.pincode }}{% endif %}
+          </p>
+
+          <div class="figures">
+            <div>
+              <small>Reserve price</small>
+              <strong>{{ listing.reserve_price | inr }}</strong>
+            </div>
+            <div>
+              <small>EMD</small>
+              <strong>{{ listing.emd_amount | inr }}</strong>
+            </div>
+            <div>
+              <small>Auction</small>
+              <strong>{{ listing.auction_start_at | ist }}</strong>
+            </div>
+          </div>
+
+          <div class="tags">
+            {% if listing.bank_name %}<span class="tag">{{ listing.bank_name }}</span>{% endif %}
+            {% if listing.asset_type %}<span class="tag">{{ listing.asset_type }}</span>{% endif %}
+            <span class="tag tag-{{ listing.possession_type }}">
+              {{ listing.possession_type }} possession
+            </span>
+            {% if listing.legal_basis and listing.legal_basis != 'sarfaesi' %}
+              <span class="tag tag-alert">{{ listing.legal_basis | upper }}</span>
+            {% endif %}
+            {% if listing.auction_start_at %}
+              <span class="tag tag-when">{{ listing.auction_start_at | human }}</span>
+            {% endif %}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+
+    {% if results.total_pages > 1 %}
+    <nav class="pager">
+      {% if results.has_previous %}
+        <a href="?{{ page_url(results.page - 1) }}">&larr; Previous</a>
+      {% else %}<span class="disabled">&larr; Previous</span>{% endif %}
+      <span class="pager-info">Page {{ results.page }} of {{ results.total_pages }}</span>
+      {% if results.has_next %}
+        <a href="?{{ page_url(results.page + 1) }}">Next &rarr;</a>
+      {% else %}<span class="disabled">Next &rarr;</span>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

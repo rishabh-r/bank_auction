@@ -195,6 +195,23 @@ def _cmd_reparse(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    print(f"\n  portal running at http://{args.host}:{args.port}")
+    print(f"  api docs at        http://{args.host}:{args.port}/api/docs")
+    print("  press Ctrl+C to stop\n")
+
+    uvicorn.run(
+        "auction_portal.web.app:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+        log_level="info",
+    )
+    return 0
+
+
 def _cmd_listings(args: argparse.Namespace) -> int:
     with session_scope() as session:
         repo = ListingRepository(session)
@@ -279,6 +296,12 @@ def build_parser() -> argparse.ArgumentParser:
     reparse.add_argument("source", choices=sorted(REGISTRY))
     reparse.add_argument("--limit", type=int, default=None)
     reparse.set_defaults(func=_cmd_reparse)
+
+    serve = sub.add_parser("serve", help="run the web portal")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--reload", action="store_true", help="reload on code changes")
+    serve.set_defaults(func=_cmd_serve)
 
     listings = sub.add_parser("listings", help="show stored auction listings")
     listings.add_argument("--limit", type=int, default=10)

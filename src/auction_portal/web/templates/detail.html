@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}{{ listing.title or 'Property' }}{% if listing.city %} in {{ listing.city }}{% endif %} | Auction Portal{% endblock %}
+{% block description %}{{ listing.asset_subtype or listing.asset_type or 'Property' }} auction by {{ listing.bank_name or 'a bank' }} in {{ listing.city or 'India' }}. Reserve price {{ listing.reserve_price | inr }}, EMD {{ listing.emd_amount | inr }}.{% endblock %}
+
+{% block content %}
+<main class="wrap detail">
+  <p class="crumbs">
+    <a href="/">All listings</a>
+    {% if listing.state %} &rsaquo; <a href="/?state={{ listing.state | urlencode }}">{{ listing.state }}</a>{% endif %}
+    {% if listing.city %} &rsaquo; <a href="/?city={{ listing.city | urlencode }}">{{ listing.city }}</a>{% endif %}
+  </p>
+
+  <header class="detail-head">
+    <div>
+      <h1>{{ listing.title or 'Property' }}</h1>
+      <p class="where">
+        {{ [listing.locality, listing.city, listing.district, listing.state] | select | join(', ') }}
+        {%- if listing.pincode %} &middot; {{ listing.pincode }}{% endif %}
+      </p>
+    </div>
+    <span class="status status-{{ listing.status }}">{{ listing.status }}</span>
+  </header>
+
+  <section class="headline-figures">
+    <div class="figure primary">
+      <small>Reserve price</small>
+      <strong>{{ listing.reserve_price | inr }}</strong>
+    </div>
+    <div class="figure">
+      <small>EMD</small>
+      <strong>{{ listing.emd_amount | inr }}</strong>
+    </div>
+    <div class="figure">
+      <small>Bid increment</small>
+      <strong>{{ listing.bid_increment | inr }}</strong>
+    </div>
+    <div class="figure">
+      <small>Auction opens</small>
+      <strong>{{ listing.auction_start_at | ist }}</strong>
+      {% if listing.auction_start_at %}
+        <span class="muted">{{ listing.auction_start_at | human }}</span>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if listing.possession_type == 'symbolic' %}
+  <div class="notice notice-warn">
+    <strong>Symbolic possession.</strong>
+    The bank holds this property on paper but may not have physical
+    possession. Occupants may still be living there, and evicting them
+    can become the buyer's responsibility. Verify before bidding.
+  </div>
+  {% endif %}
+
+  {% if listing.legal_basis and listing.legal_basis != 'sarfaesi' %}
+  <div class="notice notice-warn">
+    <strong>{{ listing.legal_basis | upper }} sale.</strong>
+    This is not a standard SARFAESI auction, so a different legal process
+    and timeline applies. Take advice before bidding.
+  </div>
+  {% endif %}
+
+  <div class="detail-grid">
+    <section class="panel">
+      <h2>The property</h2>
+      <dl>
+        <dt>Type</dt><dd>{{ listing.asset_subtype or listing.asset_type or '-' }}</dd>
+        {% if listing.area_sqft %}
+        <dt>Area</dt>
+        <dd>{{ "{:,.0f}".format(listing.area_sqft) }} sq ft
+          {%- if listing.area_unit and listing.area_unit != 'sqft' %}
+            <span class="muted">({{ "{:,.2f}".format(listing.area_value) }} {{ listing.area_unit }})</span>
+          {%- endif %}
+        </dd>
+        {% endif %}
+        <dt>Address</dt><dd>{{ listing.address or '-' }}</dd>
+        <dt>Possession</dt><dd>{{ listing.possession_type }}</dd>
+        {% if listing.physical_possession_date %}
+        <dt>Physical possession</dt><dd>{{ listing.physical_possession_date | day }}</dd>
+        {% elif listing.symbolic_possession_date %}
+        <dt>Symbolic possession</dt><dd>{{ listing.symbolic_possession_date | day }}</dd>
+        {% endif %}
+        {% if listing.latitude %}
+        <dt>Location</dt>
+        <dd>
+          <a href="https://www.openstreetmap.org/?mlat={{ listing.latitude }}&mlon={{ listing.longitude }}#map=16/{{ listing.latitude }}/{{ listing.longitude }}"
+             target="_blank" rel="noopener">
+            {{ listing.latitude }}, {{ listing.longitude }} &nearr;
+          </a>
+        </dd>
+        {% endif %}
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h2>The auction</h2>
+      <dl>
+        <dt>Bank</dt><dd>{{ listing.bank_name or '-' }}</dd>
+        {% if listing.branch_name %}<dt>Branch</dt><dd>{{ listing.branch_name }}</dd>{% endif %}
+        <dt>Auction opens</dt><dd>{{ listing.auction_start_at | ist }}</dd>
+        <dt>Auction closes</dt><dd>{{ listing.auction_end_at | ist }}</dd>
+        <dt>EMD deadline</dt><dd>{{ listing.emd_deadline_at | ist }}</dd>
+        {% if listing.inspection_from %}
+        <dt>Inspection</dt>
+        <dd>{{ listing.inspection_from | ist }} to {{ listing.inspection_to | ist }}</dd>
+        {% endif %}
+        {% if listing.authorised_officer_name %}
+        <dt>Authorised officer</dt>
+        <dd>
+          {{ listing.authorised_officer_name }}
+          {% if listing.authorised_officer_phone %}
+            <br><span class="muted">{{ listing.authorised_officer_phone }}</span>
+          {% endif %}
+        </dd>
+        {% endif %}
+        {% if listing.npa_date %}<dt>NPA since</dt><dd>{{ listing.npa_date | day }}</dd>{% endif %}
+      </dl>
+    </section>
+  </div>
+
+  <section class="panel provenance">
+    <h2>Where this came from</h2>
+    <p>
+      <a class="button" href="{{ listing.canonical_url }}" target="_blank" rel="noopener nofollow">
+        View the original notice &nearr;
+      </a>
+    </p>
+    <p class="fine">
+      Source: <code>{{ listing.source_id }}</code> &middot;
+      first seen {{ listing.first_seen_at | human }} &middot;
+      last verified {{ listing.last_verified_at | human }}
+      {%- if listing.confidence < 1 %} &middot; confidence {{ listing.confidence }}{% endif %}
+    </p>
+    <p class="notice notice-info">{{ disclaimer }}</p>
+  </section>
+
+  {% if nearby %}
+  <section class="panel">
+    <h2>Other auctions in {{ listing.city }}</h2>
+    <ul class="mini-list">
+      {% for other in nearby %}
+      <li>
+        <a href="/listing/{{ other.id }}">
+          <span>{{ other.title or 'Property' }}</span>
+          <strong>{{ other.reserve_price | inr }}</strong>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}
