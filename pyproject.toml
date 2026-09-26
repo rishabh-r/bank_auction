@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auction-portal"
+version = "0.1.0"
+description = "Centralised search portal for Indian bank auction listings"
+requires-python = ">=3.12"
+
+# Exact pins, not ranges. A build today and a build next year install the
+# same bytes. Upgrades are a deliberate, reviewable change to this file.
+dependencies = [
+    "pydantic-settings==2.15.0",
+    "email-validator==2.3.0",  # enables EmailStr validation in config
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.9",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ---------------------------------------------------------------------------
+# ruff: linter + formatter. Replaces black, isort and flake8 with one tool.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes: unused imports, undefined names
+    "I",   # isort: import ordering
+    "B",   # bugbear: likely bugs
+    "UP",  # pyupgrade: modern syntax
+    "SIM", # simplify
+    "PTH", # prefer pathlib over os.path
+]
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --strict-markers"

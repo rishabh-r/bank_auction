@@ -1,0 +1,38 @@
+# ---- Secrets -------------------------------------------------------------
+# .env holds real credentials and must NEVER be committed.
+# .env.example is committed and shows what keys are needed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Downloaded data -----------------------------------------------------
+# Raw auction documents. Can be large and is re-fetchable; not source code.
+# The application creates this directory at startup.
+data/
+
+# ---- Python --------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- Editors / OS --------------------------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.swp
+
+# ---- Logs ----------------------------------------------------------------
+logs/
+*.log
