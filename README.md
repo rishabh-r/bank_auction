@@ -12,14 +12,14 @@ Background research, the regulatory framework and the full build plan are in
 
 ## Status
 
-**Milestone 1 of 6 — Foundation.** Project scaffolding only; no data is
-collected yet.
+**Milestone 2 of 6 — Fetch & archive.** Documents can be downloaded and
+archived. Nothing is parsed or published yet.
 
 | # | Milestone | State |
 |---|-----------|-------|
 | 1 | Foundation — repo, config, tests | **done** |
-| 2 | Fetch & archive one source | next |
-| 3 | Database | |
+| 2 | Fetch & archive one source | **done** |
+| 3 | Database | next |
 | 4 | First real source adapter | |
 | 5 | Search UI | |
 | 6 | Scheduling, second source, deploy | |
@@ -49,12 +49,41 @@ On macOS or Linux, replace `.\.venv\Scripts\python.exe` with `.venv/bin/python`.
 
 ---
 
+## Usage
+
+```powershell
+# Show the loaded configuration
+.\.venv\Scripts\python.exe -m auction_portal config
+
+# Fetch and archive a document
+.\.venv\Scripts\python.exe -m auction_portal fetch <url> --source-id hdfc_web
+
+# Archive statistics
+.\.venv\Scripts\python.exe -m auction_portal stats
+```
+
+Fetching the same URL twice reports `304` or `UNCHANGED` and stores nothing
+new. That is the intended behaviour, and it is what keeps later parsing and
+OCR costs down.
+
+---
+
 ## Layout
 
 ```
 src/auction_portal/
     config.py          Settings, loaded and validated from .env
     logging_setup.py   Logging configuration
+    archiver.py        Fetch -> detect change -> archive
+    cli.py             Command line interface
+    fetching/
+        models.py      RawDocument, FetchResult
+        robots.py      robots.txt compliance
+        throttle.py    Per-domain rate limiting
+        client.py      HTTP client: retries, backoff, conditional GET
+    storage/
+        raw_store.py   Immutable content-addressed archive
+        url_state.py   Per-URL state (moves to Postgres in Milestone 3)
     sources/           One adapter per data source (Milestone 4)
 tests/                 Test suite
 docs/                  Research and build plan

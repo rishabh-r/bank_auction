@@ -13,6 +13,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic-settings==2.15.0",
     "email-validator==2.3.0",  # enables EmailStr validation in config
+    "httpx==0.28.1",
 ]
 
 [project.optional-dependencies]
