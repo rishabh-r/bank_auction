@@ -1,12 +1,29 @@
 """Command line interface.
 
-python -m auction_portal fetch <url> --source-id <id>
-python -m auction_portal stats
-python -m auction_portal config
+Running it
+    serve          run the web portal
+    schedule       run crawls and maintenance automatically
+
+Collecting
+    crawl <src>    fetch and parse a source
+    reparse <src>  re-parse archived documents, no network access
+    fetch <url>    archive a single document
+
+Inspecting
+    listings       browse stored listings
+    stats          archive statistics
+    health         report on source health
+    dedup          report duplicates and re-auctions
+    config         show loaded configuration
+    db             check database connectivity
+
+Maintenance
+    maintain       advance statuses and apply retention, once
 """
 
 import argparse
 import sys
+import time
 
 from sqlalchemy import select, text
 
@@ -14,14 +31,22 @@ from auction_portal.archiver import Archiver
 from auction_portal.config import get_settings
 from auction_portal.crawler import Crawler
 from auction_portal.db.listing_repository import ListingRepository
-from auction_portal.db.models import Listing
+from auction_portal.db.models import Listing, SourceHealth
 from auction_portal.db.repository import DocumentRepository
 from auction_portal.db.session import session_scope
+from auction_portal.dedup import DuplicateFinder
 from auction_portal.fetching.client import Fetcher
 from auction_portal.fetching.models import FetchOutcome
 from auction_portal.logging_setup import configure_logging
+from auction_portal.maintenance import (
+    advance_statuses,
+    check_health,
+    expire_old,
+    record_health,
+)
 from auction_portal.normalise.dates import to_ist
 from auction_portal.normalise.money import format_inr
+from auction_portal.scheduler import build_scheduler
 from auction_portal.sources import REGISTRY
 
 _OUTCOME_LABEL = {
@@ -154,9 +179,15 @@ def _cmd_crawl(args: argparse.Namespace) -> int:
     adapter = REGISTRY[args.source](fetch_text=fetch_text)
 
     print(f"\n  crawling {adapter.display_name}, limit {args.limit}\n")
+    started = time.monotonic()
     with Crawler(adapter, settings=settings) as crawler:
         report = crawler.run(limit=args.limit)
     fetcher.close()
+
+    # Recorded here as well as in the scheduler, so a manual crawl counts
+    # towards source health rather than looking like a gap.
+    with session_scope() as session:
+        record_health(session, report, duration_seconds=round(time.monotonic() - started, 2))
 
     print()
     print(f"  discovered        : {report.discovered:,}")
@@ -191,6 +222,83 @@ def _cmd_reparse(args: argparse.Namespace) -> int:
     print(f"  listings unchanged: {report.listings_unchanged:,}")
     if report.parse_failures:
         print(f"  parse failures    : {report.parse_failures:,}")
+    print()
+    return 0
+
+
+def _cmd_schedule(args: argparse.Namespace) -> int:
+    scheduler = build_scheduler()
+
+    print("\n  scheduled jobs:\n")
+    for job in scheduler.get_jobs():
+        print(f"    {job.id:<26} {job.name}")
+    print()
+
+    if args.dry_run:
+        print("  dry run: nothing started\n")
+        return 0
+
+    print("  running. press Ctrl+C to stop.\n")
+    try:
+        scheduler.start()
+    except (KeyboardInterrupt, SystemExit):
+        print("\n  stopped\n")
+    return 0
+
+
+def _cmd_health(args: argparse.Namespace) -> int:
+    with session_scope() as session:
+        verdicts = check_health(session, sorted(REGISTRY))
+
+        print()
+        for verdict in verdicts:
+            mark = "ok  " if verdict.ok else "FAIL"
+            last = verdict.last_run.strftime("%d %b %H:%M") if verdict.last_run else "never"
+            print(f"  [{mark}] {verdict.source_id:<20} {verdict.reason:<38} last run {last}")
+
+        recent = session.scalars(
+            select(SourceHealth).order_by(SourceHealth.ran_at.desc()).limit(8)
+        ).all()
+        if recent:
+            print()
+            print("  recent runs:")
+            for row in recent:
+                print(
+                    f"    {row.ran_at:%d %b %H:%M}  {row.source_id:<18} "
+                    f"found {row.discovered:>4}  fetched {row.fetched:>4}  "
+                    f"new {row.listings_created:>4}  "
+                    f"{'ok' if row.ok else 'FAILED'}"
+                )
+        print()
+
+    return 0 if all(v.ok for v in verdicts) else 1
+
+
+def _cmd_dedup(args: argparse.Namespace) -> int:
+    with session_scope() as session:
+        tally = DuplicateFinder(session).scan(limit=args.limit)
+
+    print()
+    print(f"  pairs examined     : {tally['compared']:,}")
+    print(f"  likely duplicates  : {tally['duplicate']:,}")
+    print(f"  re-auctions        : {tally['reauction']:,}")
+    print(f"  needs review       : {tally['review']:,}")
+    print()
+    print("  Reported, not merged. A wrong merge destroys two listings and")
+    print("  is far harder to notice than a missed one.")
+    print()
+    return 0
+
+
+def _cmd_maintain(args: argparse.Namespace) -> int:
+    with session_scope() as session:
+        moved = advance_statuses(session)
+        expired = expire_old(session)
+
+    print()
+    print(f"  upcoming -> live   : {moved['upcoming_to_live']:,}")
+    print(f"  -> closed          : {moved['to_closed']:,}")
+    print(f"  unpublished (aged) : {expired:,}")
     print()
     return 0
 
@@ -296,6 +404,22 @@ def build_parser() -> argparse.ArgumentParser:
     reparse.add_argument("source", choices=sorted(REGISTRY))
     reparse.add_argument("--limit", type=int, default=None)
     reparse.set_defaults(func=_cmd_reparse)
+
+    schedule = sub.add_parser(
+        "schedule", help="run the scheduler; crawls and maintains automatically"
+    )
+    schedule.add_argument("--dry-run", action="store_true", help="list the jobs and exit")
+    schedule.set_defaults(func=_cmd_schedule)
+
+    health = sub.add_parser("health", help="report on source health")
+    health.set_defaults(func=_cmd_health)
+
+    dedup = sub.add_parser("dedup", help="report duplicate and re-auction relationships")
+    dedup.add_argument("--limit", type=int, default=None)
+    dedup.set_defaults(func=_cmd_dedup)
+
+    maintain = sub.add_parser("maintain", help="run maintenance jobs once (statuses, retention)")
+    maintain.set_defaults(func=_cmd_maintain)
 
     serve = sub.add_parser("serve", help="run the web portal")
     serve.add_argument("--host", default="127.0.0.1")

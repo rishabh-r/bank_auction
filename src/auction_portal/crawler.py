@@ -122,6 +122,25 @@ class Crawler:
                 else:
                     report.listings_unchanged += 1
 
+    def run_urls(self, urls: list[str], skip_unchanged: bool = True) -> CrawlReport:
+        """Crawl a specific set of URLs, skipping discovery.
+
+        Used to re-check auctions happening soon without walking the whole
+        sitemap again.
+        """
+        report = CrawlReport(source_id=self._adapter.source_id)
+        report.discovered = len(urls)
+
+        for url in urls:
+            try:
+                self._process(url, report, skip_unchanged)
+            except Exception as exc:
+                report.failed += 1
+                report.errors.append(f"{url}: {type(exc).__name__}: {exc}")
+                log.exception("failed processing %s", url)
+
+        return report
+
     def reparse(self, limit: int | None = None) -> CrawlReport:
         """Re-run parsing over already-archived documents. No network access.
 

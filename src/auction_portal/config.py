@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     )
     db_echo: bool = False  # set true to log every SQL statement
 
+    # Read by docker-compose.yml, not by the application. Declared here so
+    # that a .env copied from .env.example still validates - extra="forbid"
+    # would otherwise reject it.
+    postgres_password: SecretStr | None = None
+
     # --- API keys ---------------------------------------------------------
     # SecretStr keeps the value out of logs, tracebacks and repr() output.
     # Read it deliberately with .get_secret_value(); it cannot leak by accident.

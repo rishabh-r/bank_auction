@@ -1,0 +1,70 @@
+# Production-shaped deployment: database, web portal, scheduler.
+#
+# Three processes, deliberately separate:
+#   postgres   the database
+#   web        serves the portal; never does slow work
+#   scheduler  crawls and maintains; never serves a request
+#
+# Keeping them apart means a long crawl cannot make the site slow, and
+# restarting the site cannot interrupt a crawl.
+#
+#   docker compose up -d
+#   docker compose run --rm web alembic upgrade head
+#   docker compose logs -f scheduler
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: auction_portal
+      POSTGRES_USER: auction
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auction -d auction_portal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Not published to the host: only the other containers need it.
+    expose:
+      - "5432"
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+psycopg://auction:${POSTGRES_PASSWORD}@postgres:5432/auction_portal
+      CONTACT_EMAIL: ${CONTACT_EMAIL:?set CONTACT_EMAIL in .env}
+      CONTACT_URL: ${CONTACT_URL:?set CONTACT_URL in .env}
+      LOG_LEVEL: INFO
+    volumes:
+      - archive:/app/data
+    ports:
+      - "8000:8000"
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+psycopg://auction:${POSTGRES_PASSWORD}@postgres:5432/auction_portal
+      CONTACT_EMAIL: ${CONTACT_EMAIL:?set CONTACT_EMAIL in .env}
+      CONTACT_URL: ${CONTACT_URL:?set CONTACT_URL in .env}
+      CRAWLER_DELAY_SECONDS: "3.0"
+      LOG_LEVEL: INFO
+    volumes:
+      - archive:/app/data
+    command: ["python", "-m", "auction_portal", "schedule"]
+
+volumes:
+  pgdata:
+  archive:

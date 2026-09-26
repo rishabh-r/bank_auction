@@ -12,9 +12,9 @@ Background research, the regulatory framework and the full build plan are in
 
 ## Status
 
-**Milestone 5 of 6 — Search interface.** A working portal: search, filter
-by bank, state, city, property type, possession and price, with a detail
-page for every listing. Not yet scheduled or deployed.
+**Phase 1 complete.** The portal collects listings from two sources,
+maintains itself on a schedule, monitors its own health, and is packaged
+for deployment.
 
 | # | Milestone | State |
 |---|-----------|-------|
@@ -23,7 +23,13 @@ page for every listing. Not yet scheduled or deployed.
 | 3 | Database | **done** |
 | 4 | First real source adapter | **done** |
 | 5 | Search UI | **done** |
-| 6 | Scheduling, second source, deploy | next |
+| 6 | Scheduling, second source, monitoring, packaging | **done** |
+
+Deployment itself needs your hosting account and a legal review — see
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+**Phase 2** is PDF and OCR extraction, which unlocks the private banks
+(ICICI, HDFC, Axis). It is roughly as much work as everything above.
 
 ![Search page](docs/screenshots/search.png)
 
@@ -31,9 +37,17 @@ page for every listing. Not yet scheduled or deployed.
 
 | Source | Coverage | Status |
 |---|---|---|
-| [BAANKNET](https://baanknet.com) | 12 public sector banks + IBBI, ~72,000 properties | live |
+| [BAANKNET](https://baanknet.com) properties | 12 public sector banks + IBBI, ~72,000 properties | live |
+| BAANKNET vehicles | repossessed cars and commercial vehicles, ~400 | live |
 | Bank notice PDFs (HDFC, Axis, ICICI) | private banks | Phase 2 |
 | C1 India, AuctionTiger, MSTC | private banks and NBFCs | Phase 3 |
+
+Vehicles reach auction by a different legal route. A car is hypothecated,
+not mortgaged, and banks almost never use SARFAESI for one — the Section
+14 magistrate route costs more than the vehicle. They repossess under the
+contractual repossession clause instead, governed by RBI's Responsible
+Business Conduct Directions. The adapter records this as
+`legal_basis = contractual`.
 
 ### Why BAANKNET first
 
@@ -97,6 +111,19 @@ after a reboot.
 ```powershell
 # Run the portal, then open http://127.0.0.1:8000
 .\.venv\Scripts\python.exe -m auction_portal serve
+
+# Run crawls and maintenance automatically
+.\.venv\Scripts\python.exe -m auction_portal schedule
+.\.venv\Scripts\python.exe -m auction_portal schedule --dry-run   # list jobs
+
+# Is anything broken? Exits non-zero if so, so it works as a cron check.
+.\.venv\Scripts\python.exe -m auction_portal health
+
+# Report duplicates and re-auctions
+.\.venv\Scripts\python.exe -m auction_portal dedup
+
+# Advance statuses and apply retention, once
+.\.venv\Scripts\python.exe -m auction_portal maintain
 
 # Show the loaded configuration
 .\.venv\Scripts\python.exe -m auction_portal config
@@ -162,6 +189,49 @@ What every page guarantees, and what the tests enforce:
 
 ---
 
+## Running unattended
+
+`auction_portal schedule` runs everything on a timer:
+
+| Job | When | Why |
+|---|---|---|
+| Crawl each source | every 6 hours | new and changed listings |
+| Refresh imminent auctions | hourly | auctions within 7 days get moved and cancelled at short notice |
+| Advance statuses | every 15 min | upcoming to live to closed, on time |
+| Expire old listings | daily 03:30 IST | stop publishing concluded auctions |
+| Health check | every 2 hours | shout when a source looks broken |
+
+### Monitoring
+
+Scrapers fail **silently** — a changed selector returns zero results
+without raising anything. So the alert is not "did it error" but "is the
+parser still yielding listings".
+
+A source is unhealthy when it discovers no URLs, fetches pages but parses
+none of them, has most of its fetches fail, or produces no listings at
+all for 48 hours. Note the last one counts listings *seen*, not listings
+*created*: once a source is established most runs legitimately create
+nothing, and alerting on that would cry wolf daily.
+
+### Duplicates and re-auctions
+
+`auction_portal dedup` reports two relationships:
+
+- **Duplicates** — the same asset from two sources, to be merged.
+- **Re-auctions** — the same asset months later at a lower reserve, to be
+  linked and shown as price history.
+
+Identity is judged only on properties of the *asset* — address, area,
+locality, PIN code — and never on price or date. That matters: a
+re-auction has by definition a later date and usually a lower price, so
+scoring those as differences would make the matcher worst at exactly the
+case it most needs to catch.
+
+Results are reported, not merged. A wrong merge destroys two listings and
+is far harder to notice than a missed one.
+
+---
+
 ## Layout
 
 ```
@@ -178,6 +248,9 @@ src/auction_portal/
         geo.py         Coordinate validation against state bounding boxes
         text.py        Whitespace, mojibake, PIN codes, phone numbers
     search.py          Filters, facets, sorting, pagination
+    dedup.py           Duplicate and re-auction detection
+    maintenance.py     Status lifecycle, retention, health checks
+    scheduler.py       Unattended job scheduling
     web/
         app.py         FastAPI: HTML pages and JSON API
         templates/     Server-rendered pages
@@ -198,7 +271,10 @@ src/auction_portal/
     sources/
         base.py        SourceAdapter interface, ParsedListing
         flight.py      Reading Next.js server-rendered payloads
-        baanknet.py    BAANKNET adapter
+        baanknet.py    BAANKNET property adapter
+        baanknet_vehicle.py  BAANKNET vehicle adapter
+Dockerfile             Container image
+docker-compose.yml     postgres + web + scheduler
 migrations/            Alembic schema migrations
 scripts/               setup_postgres.py, probe.py, make_fixture.py
 tests/                 Test suite

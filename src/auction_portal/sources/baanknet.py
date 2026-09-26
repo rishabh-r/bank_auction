@@ -37,7 +37,7 @@ from auction_portal.normalise.text import (
     normalise_pincode,
     title_case,
 )
-from auction_portal.sources.base import ParsedListing, SourceAdapter
+from auction_portal.sources.base import ParsedListing, SourceAdapter, strip_personal_data
 from auction_portal.sources.flight import extract_payload, find_objects, largest_object
 
 log = logging.getLogger(__name__)
@@ -137,7 +137,12 @@ class BaanknetAdapter(SourceAdapter):
         self._apply_schedule(listing, auction)
         self._apply_legal(listing, prop, auction)
 
-        listing.raw_payload = {"property": prop, "auction": auction}
+        # Borrower and guarantor details are dropped before storage, not
+        # merely hidden at display time.
+        listing.raw_payload = {
+            "property": strip_personal_data(prop),
+            "auction": strip_personal_data(auction),
+        }
         self._score(listing)
         return listing
 

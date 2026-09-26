@@ -252,6 +252,45 @@ class Listing(Base):
         )
 
 
+class SourceHealth(Base):
+    """One row per crawl run, per source.
+
+    Scrapers fail silently: a changed selector returns zero results rather
+    than an error. Recording the outcome of every run is what turns that
+    into something we can alert on.
+    """
+
+    __tablename__ = "source_health"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    ran_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    duration_seconds: Mapped[float | None] = mapped_column(Numeric(10, 2))
+
+    discovered: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    fetched: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unchanged: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    parse_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    listings_created: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    listings_updated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Created + updated + unchanged. This, not listings_created, is the
+    # health signal: once a source is established most runs legitimately
+    # create nothing, but a run that yields no listings at all means the
+    # parser has stopped working.
+    listings_seen: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (Index("ix_source_health_source_time", "source_id", "ran_at"),)
+
+    def __repr__(self) -> str:
+        return f"<SourceHealth {self.source_id} at {self.ran_at} ok={self.ok}>"
+
+
 class ListingRevision(Base):
     """Field-level history. Every price cut and postponement, permanently.
 

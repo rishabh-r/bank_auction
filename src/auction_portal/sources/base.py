@@ -79,6 +79,33 @@ class ParsedListing:
             self.quality_flags.append(name)
 
 
+#: Fields that identify the borrower rather than the asset.
+#:
+#: Stripped before any payload is stored. Publishing that someone defaulted
+#: is a real harm and adds nothing for a buyer, so the data never enters the
+#: database - it cannot then leak through an API change or a template edit.
+#: See Part E of the project documentation on the DPDP Act.
+PERSONAL_FIELDS = frozenset(
+    {
+        "borrowerName",
+        "borrowerAddress",
+        "borrowerCIF",
+        "coBorrowerName",
+        "guarantorName",
+        "guarantorAddress",
+        "ownerName",
+        "ownerAddress",
+        "custId",
+        "customerId",
+    }
+)
+
+
+def strip_personal_data(record: dict) -> dict:
+    """Remove borrower-identifying fields from a source record."""
+    return {key: value for key, value in record.items() if key not in PERSONAL_FIELDS}
+
+
 class SourceAdapter(ABC):
     """Base class for every auction data source."""
 
