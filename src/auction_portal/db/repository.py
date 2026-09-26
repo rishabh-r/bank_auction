@@ -54,6 +54,19 @@ class DocumentRepository:
         )
         return dict(rows.all())
 
+    def documents_for_source(
+        self, source_id: str, limit: int | None = None
+    ) -> list[SourceDocument]:
+        """Archived documents for one source, newest first."""
+        stmt = (
+            select(SourceDocument)
+            .where(SourceDocument.source_id == source_id)
+            .order_by(SourceDocument.fetched_at.desc())
+        )
+        if limit:
+            stmt = stmt.limit(limit)
+        return list(self._session.scalars(stmt))
+
     def recent_documents(self, limit: int = 10) -> list[SourceDocument]:
         return list(
             self._session.scalars(

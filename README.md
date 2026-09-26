@@ -12,17 +12,34 @@ Background research, the regulatory framework and the full build plan are in
 
 ## Status
 
-**Milestone 3 of 6 — Database.** Documents are downloaded, archived and
-recorded in PostgreSQL. Nothing is parsed or published yet.
+**Milestone 4 of 6 — First source adapter.** Real auction listings from
+BAANKNET are collected, normalised and stored. No web interface yet.
 
 | # | Milestone | State |
 |---|-----------|-------|
 | 1 | Foundation — repo, config, tests | **done** |
 | 2 | Fetch & archive one source | **done** |
 | 3 | Database | **done** |
-| 4 | First real source adapter | next |
-| 5 | Search UI | |
+| 4 | First real source adapter | **done** |
+| 5 | Search UI | next |
 | 6 | Scheduling, second source, deploy | |
+
+## Sources
+
+| Source | Coverage | Status |
+|---|---|---|
+| [BAANKNET](https://baanknet.com) | 12 public sector banks + IBBI, ~72,000 properties | live |
+| Bank notice PDFs (HDFC, Axis, ICICI) | private banks | Phase 2 |
+| C1 India, AuctionTiger, MSTC | private banks and NBFCs | Phase 3 |
+
+### Why BAANKNET first
+
+- `robots.txt` is `User-agent: * / Disallow:` — everything is permitted
+- it publishes sitemaps, so URLs come from the site telling crawlers what
+  to fetch rather than from guesswork
+- detail pages are server-rendered, so the structured record behind the
+  page is available directly: no OCR, no LLM, no inference
+- one source covers all 12 public sector banks
 
 ---
 
@@ -81,7 +98,17 @@ after a reboot.
 # Check the database connection and migration state
 .\.venv\Scripts\python.exe -m auction_portal db
 
-# Fetch and archive a document
+# Collect listings from a source
+.\.venv\Scripts\python.exe -m auction_portal crawl baanknet --limit 50
+
+# Browse what has been collected
+.\.venv\Scripts\python.exe -m auction_portal listings --state Gujarat
+.\.venv\Scripts\python.exe -m auction_portal listings --all   # include withheld
+
+# Re-run parsing over archived documents. No network access at all.
+.\.venv\Scripts\python.exe -m auction_portal reparse baanknet
+
+# Fetch and archive a single document
 .\.venv\Scripts\python.exe -m auction_portal fetch <url> --source-id hdfc_web
 
 # Archive statistics
@@ -92,6 +119,19 @@ Fetching the same URL twice reports `304` or `UNCHANGED` and stores nothing
 new. That is the intended behaviour, and it is what keeps later parsing and
 OCR costs down.
 
+`reparse` is the reason raw bytes are archived immutably: when the parser
+improves, history is reprocessed offline instead of re-crawled. No source
+is contacted and nothing is lost.
+
+### Withheld listings
+
+A listing is only published when its confidence reaches 0.70. Anything
+below that is stored but hidden, so the portal shows fewer listings rather
+than a wrong price. On the first real crawl this caught a property whose
+bank had uploaded a reserve price of Rs 1.
+
+Use `--all` to see withheld listings and the flags that withheld them.
+
 ---
 
 ## Layout
@@ -101,7 +141,13 @@ src/auction_portal/
     config.py          Settings, loaded and validated from .env
     logging_setup.py   Logging configuration
     archiver.py        Fetch -> detect change -> archive -> record
+    crawler.py         Runs a source adapter end to end; also reparse
     cli.py             Command line interface
+    normalise/
+        money.py       Indian rupee amounts (lakh/crore, 2-2-3 grouping)
+        dates.py       Day-first Indian dates, IST handling
+        area.py        sqft/sqyd/acre/hectare/guntha conversion
+        text.py        Whitespace, mojibake, PIN codes, phone numbers
     fetching/
         models.py      RawDocument, FetchResult
         robots.py      robots.txt compliance
@@ -110,13 +156,19 @@ src/auction_portal/
     storage/
         raw_store.py   Immutable content-addressed archive
     db/
-        models.py      Tables: source_documents, url_state
+        models.py      Tables: source_documents, url_state, listings,
+                       listing_revisions
         session.py     Engine and transaction handling
-        repository.py  Database reads and writes
-    sources/           One adapter per data source (Milestone 4)
+        repository.py  Document reads and writes
+        listing_repository.py  Listing upsert and change history
+    sources/
+        base.py        SourceAdapter interface, ParsedListing
+        flight.py      Reading Next.js server-rendered payloads
+        baanknet.py    BAANKNET adapter
 migrations/            Alembic schema migrations
-scripts/               setup_postgres.py
+scripts/               setup_postgres.py, probe.py, make_fixture.py
 tests/                 Test suite
+tests/fixtures/        Real archived pages with verified expected output
 docs/                  Research and build plan
 data/                  Downloaded documents (git-ignored, created at runtime)
 .pgsql/                Local PostgreSQL server (git-ignored)

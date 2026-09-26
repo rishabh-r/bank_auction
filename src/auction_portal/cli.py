@@ -8,14 +8,21 @@ python -m auction_portal config
 import argparse
 import sys
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from auction_portal.archiver import Archiver
 from auction_portal.config import get_settings
+from auction_portal.crawler import Crawler
+from auction_portal.db.listing_repository import ListingRepository
+from auction_portal.db.models import Listing
 from auction_portal.db.repository import DocumentRepository
 from auction_portal.db.session import session_scope
+from auction_portal.fetching.client import Fetcher
 from auction_portal.fetching.models import FetchOutcome
 from auction_portal.logging_setup import configure_logging
+from auction_portal.normalise.dates import to_ist
+from auction_portal.normalise.money import format_inr
+from auction_portal.sources import REGISTRY
 
 _OUTCOME_LABEL = {
     FetchOutcome.NEW: "NEW        content archived",
@@ -132,6 +139,108 @@ def _cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_crawl(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    settings.ensure_directories()
+
+    fetcher = Fetcher(settings)
+
+    def fetch_text(url: str) -> str:
+        result = fetcher.fetch(url, source_id=args.source)
+        if result.document is None:
+            raise RuntimeError(f"could not fetch {url}: {result.error or result.outcome}")
+        return result.document.content.decode("utf-8", errors="replace")
+
+    adapter = REGISTRY[args.source](fetch_text=fetch_text)
+
+    print(f"\n  crawling {adapter.display_name}, limit {args.limit}\n")
+    with Crawler(adapter, settings=settings) as crawler:
+        report = crawler.run(limit=args.limit)
+    fetcher.close()
+
+    print()
+    print(f"  discovered        : {report.discovered:,}")
+    print(f"  fetched           : {report.fetched:,}")
+    print(f"  unchanged         : {report.unchanged:,}")
+    print(f"  listings created  : {report.listings_created:,}")
+    print(f"  listings updated  : {report.listings_updated:,}")
+    print(f"  listings unchanged: {report.listings_unchanged:,}")
+    if report.parse_failures:
+        print(f"  parse failures    : {report.parse_failures:,}")
+    if report.failed:
+        print(f"  fetch failures    : {report.failed:,}")
+    for error in report.errors[:5]:
+        print(f"    {error[:110]}")
+    print()
+    return 0
+
+
+def _cmd_reparse(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    adapter = REGISTRY[args.source]()
+
+    print(f"\n  reparsing archived {adapter.display_name} documents (offline)\n")
+    with Crawler(adapter, settings=settings) as crawler:
+        report = crawler.reparse(limit=args.limit)
+
+    print()
+    print(f"  documents read    : {report.discovered:,}")
+    print(f"  parsed            : {report.fetched:,}")
+    print(f"  listings created  : {report.listings_created:,}")
+    print(f"  listings updated  : {report.listings_updated:,}")
+    print(f"  listings unchanged: {report.listings_unchanged:,}")
+    if report.parse_failures:
+        print(f"  parse failures    : {report.parse_failures:,}")
+    print()
+    return 0
+
+
+def _cmd_listings(args: argparse.Namespace) -> int:
+    with session_scope() as session:
+        repo = ListingRepository(session)
+        stmt = select(Listing).order_by(Listing.auction_start_at.asc().nulls_last())
+        if not args.all:
+            stmt = stmt.where(Listing.is_published.is_(True))
+        if args.state:
+            stmt = stmt.where(Listing.state.ilike(f"%{args.state}%"))
+        if args.city:
+            stmt = stmt.where(Listing.city.ilike(f"%{args.city}%"))
+
+        rows = list(session.scalars(stmt.limit(args.limit)))
+
+        print()
+        print(f"  total stored : {repo.count():,}")
+        print(f"  published    : {repo.count(published_only=True):,}")
+        print()
+
+        if not rows:
+            print("  no listings match")
+            print()
+            return 0
+
+        for listing in rows:
+            when = (
+                to_ist(listing.auction_start_at).strftime("%d %b %Y %H:%M")
+                if listing.auction_start_at
+                else "date unknown"
+            )
+            print(f"  [{listing.external_id}] {listing.title or '(untitled)'}")
+            print(
+                f"      {listing.city or '?'}, {listing.state or '?'}"
+                f"   {format_inr(listing.reserve_price)}"
+                f"   EMD {format_inr(listing.emd_amount)}"
+            )
+            print(
+                f"      auction {when}   {listing.possession_type or '?'} possession"
+                f"   {listing.bank_name or 'bank unknown'}"
+            )
+            if listing.quality_flags:
+                print(f"      flags: {', '.join(listing.quality_flags)}")
+            print(f"      {listing.canonical_url}")
+            print()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="auction_portal",
@@ -157,6 +266,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     db = sub.add_parser("db", help="check database connectivity and migrations")
     db.set_defaults(func=_cmd_db)
+
+    crawl = sub.add_parser("crawl", help="run a source adapter end to end")
+    crawl.add_argument("source", choices=sorted(REGISTRY), help="which source")
+    crawl.add_argument("--limit", type=int, default=25, help="max URLs this run (default: 25)")
+    crawl.set_defaults(func=_cmd_crawl)
+
+    reparse = sub.add_parser(
+        "reparse",
+        help="re-run parsing over archived documents (no network access)",
+    )
+    reparse.add_argument("source", choices=sorted(REGISTRY))
+    reparse.add_argument("--limit", type=int, default=None)
+    reparse.set_defaults(func=_cmd_reparse)
+
+    listings = sub.add_parser("listings", help="show stored auction listings")
+    listings.add_argument("--limit", type=int, default=10)
+    listings.add_argument("--state")
+    listings.add_argument("--city")
+    listings.add_argument("--all", action="store_true", help="include unpublished")
+    listings.set_defaults(func=_cmd_listings)
 
     return parser
 

@@ -10,19 +10,24 @@ The design rule that shapes both: rows here are append-mostly. We record
 what happened, we do not overwrite history.
 """
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -113,3 +118,146 @@ class UrlStateRow(Base):
 
     def __repr__(self) -> str:
         return f"<UrlStateRow url={self.url!r} fetches={self.fetch_count}>"
+
+
+class Listing(Base):
+    """One asset offered at auction: the user-facing record.
+
+    Identified by (source_id, external_id) rather than a URL, so the same
+    asset stays one row even if the source changes its URL scheme. When a
+    property is re-auctioned later, that is a *new* row with an incremented
+    round_number, linked by asset_key - not an update, because the price
+    history is the most valuable thing we accumulate.
+    """
+
+    __tablename__ = "listings"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Stable identity of the underlying asset across re-auctions.
+    asset_key: Mapped[str | None] = mapped_column(String(128), index=True)
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    source_document_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("source_documents.id", ondelete="SET NULL")
+    )
+    canonical_url: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # --- what it is ---
+    asset_class: Mapped[str] = mapped_column(String(32), nullable=False)  # property|vehicle
+    asset_type: Mapped[str | None] = mapped_column(String(64))  # residential|commercial|...
+    asset_subtype: Mapped[str | None] = mapped_column(String(128))
+    title: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
+
+    # --- where it is ---
+    address: Mapped[str | None] = mapped_column(Text)
+    locality: Mapped[str | None] = mapped_column(Text)
+    city: Mapped[str | None] = mapped_column(String(128), index=True)
+    district: Mapped[str | None] = mapped_column(String(128))
+    state: Mapped[str | None] = mapped_column(String(128), index=True)
+    pincode: Mapped[str | None] = mapped_column(String(10), index=True)
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+
+    # --- how big ---
+    # Original value and unit are kept for display; the normalised square
+    # feet exists so that a range filter can work across mixed units.
+    area_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    area_unit: Mapped[str | None] = mapped_column(String(24))
+    area_sqft: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), index=True)
+
+    # --- the money ---
+    reserve_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), index=True)
+    emd_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    bid_increment: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    outstanding_dues: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+
+    # --- the timetable ---
+    auction_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    auction_end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    emd_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    inspection_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    inspection_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # --- the legal position ---
+    bank_name: Mapped[str | None] = mapped_column(String(160), index=True)
+    branch_name: Mapped[str | None] = mapped_column(String(200))
+    possession_type: Mapped[str | None] = mapped_column(String(16))  # physical|symbolic
+    symbolic_possession_date: Mapped[date | None] = mapped_column(Date)
+    physical_possession_date: Mapped[date | None] = mapped_column(Date)
+    npa_date: Mapped[date | None] = mapped_column(Date)
+    legal_basis: Mapped[str | None] = mapped_column(String(32))
+
+    authorised_officer_name: Mapped[str | None] = mapped_column(String(200))
+    authorised_officer_phone: Mapped[str | None] = mapped_column(String(64))
+
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="upcoming")
+
+    # --- provenance and quality ---
+    confidence: Mapped[Decimal] = mapped_column(
+        Numeric(3, 2), nullable=False, default=Decimal("1.00")
+    )
+    quality_flags: Mapped[list[str] | None] = mapped_column(JSONB)
+    is_published: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    raw_payload: Mapped[dict | None] = mapped_column(JSONB)
+
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_verified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("source_id", "external_id", name="uq_listing_source_external"),
+        # Most queries want live auctions only, and those are a small slice of
+        # the table once history accumulates. A partial index stays small.
+        Index(
+            "ix_listing_live",
+            "status",
+            "auction_start_at",
+            postgresql_where=(status.in_(("upcoming", "live"))),
+        ),
+        Index("ix_listing_geo", "state", "city", "asset_type"),
+        Index("ix_listing_bank", "bank_name"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Listing {self.source_id}/{self.external_id} "
+            f"{self.city} reserve={self.reserve_price}>"
+        )
+
+
+class ListingRevision(Base):
+    """Field-level history. Every price cut and postponement, permanently.
+
+    This is what lets the portal say "third attempt, reserve down 34% since
+    January" - which no competitor surfaces.
+    """
+
+    __tablename__ = "listing_revisions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    listing_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("listings.id", ondelete="CASCADE"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    field_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    old_value: Mapped[str | None] = mapped_column(Text)
+    new_value: Mapped[str | None] = mapped_column(Text)
+    source_document_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("source_documents.id", ondelete="SET NULL")
+    )
+
+    __table_args__ = (Index("ix_revision_listing", "listing_id", "changed_at"),)
+
+    def __repr__(self) -> str:
+        return f"<ListingRevision {self.field_name}: {self.old_value} -> {self.new_value}>"
