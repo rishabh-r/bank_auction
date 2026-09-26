@@ -63,6 +63,27 @@ def test_invalid_email_is_rejected():
         Settings(contact_email="not-an-email", contact_url="https://example.com/bot")
 
 
+def test_api_key_is_absent_by_default():
+    assert Settings(**VALID).openai_api_key is None
+
+
+def test_blank_api_key_in_env_is_treated_as_unset():
+    """`OPENAI_API_KEY=` in .env means 'not configured', not 'empty key'."""
+    assert Settings(**VALID, openai_api_key="").openai_api_key is None
+
+
+def test_api_key_never_appears_in_repr_or_logs():
+    """The single most important test here: secrets must not leak into output."""
+    secret = "sk-proj-THIS-MUST-NOT-APPEAR"
+    settings = Settings(**VALID, openai_api_key=secret)
+
+    assert secret not in repr(settings)
+    assert secret not in str(settings)
+    assert secret not in str(settings.model_dump())
+    # Retrieving it must be a deliberate, visible act.
+    assert settings.openai_api_key.get_secret_value() == secret
+
+
 def test_unknown_setting_is_rejected():
     """A typo'd key must fail loudly rather than be silently ignored."""
     with pytest.raises(ValidationError):

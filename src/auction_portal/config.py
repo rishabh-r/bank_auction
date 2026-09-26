@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import EmailStr, Field, HttpUrl
+from pydantic import EmailStr, Field, HttpUrl, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -43,6 +43,18 @@ class Settings(BaseSettings):
     crawler_timeout_seconds: float = Field(default=30.0, gt=0)
     crawler_max_retries: int = Field(default=3, ge=0, le=10)
     crawler_respect_robots: bool = True
+
+    # --- API keys ---------------------------------------------------------
+    # SecretStr keeps the value out of logs, tracebacks and repr() output.
+    # Read it deliberately with .get_secret_value(); it cannot leak by accident.
+    # Not needed until Phase 2 (LLM-assisted extraction from PDF notices).
+    openai_api_key: SecretStr | None = None
+
+    @field_validator("openai_api_key", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        """Treat `OPENAI_API_KEY=` in .env as absent rather than an empty key."""
+        return None if value in ("", None) else value
 
     @property
     def raw_dir(self) -> Path:
