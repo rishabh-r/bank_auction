@@ -196,6 +196,30 @@ For anyone technical on your side.
 
 ---
 
+### H. Checking it all at once
+
+If you would rather not click through every item above, this runs the
+important checks against the live site and reports pass or fail.
+
+With the portal running, in a **second** PowerShell window:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\verify_manual.py
+```
+
+Expected: 18 lines all reading `[PASS]`, ending with
+
+```
+All manual claims verified against live data.
+```
+
+It exits non-zero if anything fails, so it also works as an automated
+check. This does **not** replace looking at the pages yourself — it
+cannot tell you whether the site is pleasant to use, only whether it is
+behaving correctly.
+
+---
+
 ## 5. Checking the automatic side
 
 The portal is only half the system. The other half collects the data.
@@ -373,6 +397,9 @@ Full detail is in `docs/DEPLOYMENT.md`.
 
 # Run everything automatically
 .\.venv\Scripts\python.exe -m auction_portal schedule
+
+# Verify the site behaves as this guide says (18 live checks)
+.\.venv\Scripts\python.exe scripts\verify_manual.py
 
 # Confirm the code is sound (301 automated tests)
 .\.venv\Scripts\python.exe -m pytest
