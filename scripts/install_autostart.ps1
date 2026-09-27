@@ -1,8 +1,12 @@
-# Registers a Windows scheduled task so the collector starts with Windows.
+# Registers a Windows scheduled task so the whole portal starts with
+# Windows: database, web server and collector.
 #
-# Without this, the scheduler only runs while someone has a terminal open,
-# and stops at the first reboot. This is the local equivalent of the
-# `scheduler` service in docker-compose.yml.
+# Without this, everything only runs while someone has a terminal open and
+# stops at the first reboot. This is the local equivalent of the `web` and
+# `scheduler` services in docker-compose.yml.
+#
+# Note this makes the portal start on *this machine*. It does not make it
+# reachable from the internet - see docs/DEPLOYMENT.md for that.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\install_autostart.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\install_autostart.ps1 -Status
@@ -20,7 +24,7 @@ $ErrorActionPreference = 'Stop'
 
 $TaskName = 'AuctionPortalScheduler'
 $root = Split-Path -Parent $PSScriptRoot
-$runner = Join-Path $root 'scripts\run_scheduler.ps1'
+$runner = Join-Path $root 'scripts\run_portal.ps1'
 
 
 function Show-Status {
@@ -36,7 +40,8 @@ function Show-Status {
     Write-Output "  last result: $($info.LastTaskResult)  (0 = ok, 267009 = currently running)"
     Write-Output "  next run  : $($info.NextRunTime)"
     Write-Output ""
-    Write-Output "  log: $(Join-Path $root 'logs\scheduler.log')"
+    Write-Output "  logs: $(Join-Path $root 'logs\portal.log')  (database + scheduler)"
+    Write-Output "        $(Join-Path $root 'logs\web.log')     (web server)"
 }
 
 
