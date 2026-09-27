@@ -27,6 +27,21 @@
     </div>
   </header>
 
+  {% if version %}
+  <div id="update-notice" class="update-notice" role="status" aria-live="polite" hidden
+       data-count="{{ version.count }}"
+       data-newest="{{ version.newest or '' }}"
+       data-changed="{{ version.changed or '' }}">
+    <div class="wrap update-inner">
+      <span class="update-text"></span>
+      <span class="update-actions">
+        <button type="button" class="update-refresh">Refresh</button>
+        <button type="button" class="update-dismiss" aria-label="Dismiss">Not now</button>
+      </span>
+    </div>
+  </div>
+  {% endif %}
+
   {% block content %}{% endblock %}
 
   <footer class="site-footer">
@@ -41,5 +56,7 @@
       </p>
     </div>
   </footer>
+
+  {% if version %}<script src="/static/updates.js" defer></script>{% endif %}
 </body>
 </html>

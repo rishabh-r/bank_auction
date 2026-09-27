@@ -113,6 +113,9 @@ def create_app() -> FastAPI:
                 "disclaimer": DISCLAIMER,
                 "params": _params(request),
                 "now": datetime.now(UTC),
+                # Rendered into the page so the browser can tell later
+                # whether anything has changed since this response.
+                "version": service.data_version(),
                 **_url_helpers(request),
             },
         )
@@ -138,6 +141,7 @@ def create_app() -> FastAPI:
                 "nearby": service.nearby(listing),
                 "disclaimer": DISCLAIMER,
                 "now": datetime.now(UTC),
+                "version": service.data_version(),
             },
         )
 
@@ -213,6 +217,16 @@ def create_app() -> FastAPI:
     def health(session: SessionDep):
         totals = SearchService(session).totals()
         return {"status": "ok", **totals}
+
+    @app.get("/api/version")
+    def version(session: SessionDep):
+        """A cheap fingerprint of the published data.
+
+        Polled by the page so it can offer a refresh when the collector
+        has found something, rather than reloading underneath someone who
+        is halfway through reading a listing.
+        """
+        return SearchService(session).data_version()
 
     # --- crawler directives ----------------------------------------------
 

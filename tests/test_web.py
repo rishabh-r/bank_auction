@@ -249,6 +249,64 @@ def test_security_txt_is_published(client):
     assert "Contact: mailto:" in body
 
 
+# --- new data notice ------------------------------------------------------
+
+
+def test_version_endpoint_fingerprints_the_data(client):
+    payload = client.get("/api/version").json()
+    assert payload["count"] == 2  # published only
+    assert "newest" in payload
+    assert "changed" in payload
+
+
+def test_version_counts_only_published_listings(client, db_session_factory):
+    """A withheld listing appearing would prompt a refresh that shows
+    the reader nothing new."""
+    assert client.get("/api/version").json()["count"] == 2
+
+
+def test_version_changes_when_a_listing_is_added(client, db_session_factory):
+    before = client.get("/api/version").json()
+
+    session = db_session_factory()
+    ListingRepository(session).upsert(make("99", title="Brand new listing"))
+    session.commit()
+    session.close()
+
+    after = client.get("/api/version").json()
+    assert after["count"] == before["count"] + 1
+
+
+def test_pages_carry_the_version_for_the_browser_to_compare(client):
+    body = client.get("/").text
+    assert 'id="update-notice"' in body
+    assert "data-count=" in body
+
+
+def test_the_notice_starts_hidden(client):
+    """It must only appear once something has actually changed."""
+    body = client.get("/").text
+    assert "update-notice" in body
+    notice = body[body.index('id="update-notice"') : body.index('id="update-notice"') + 400]
+    assert "hidden" in notice
+
+
+def test_the_notice_offers_a_choice_rather_than_reloading(client):
+    body = client.get("/").text
+    assert "update-refresh" in body
+    assert "update-dismiss" in body
+
+
+def test_the_update_script_is_served(client):
+    response = client.get("/static/updates.js")
+    assert response.status_code == 200
+    assert "api/version" in response.text
+
+
+def test_detail_pages_also_offer_refresh(client):
+    assert 'id="update-notice"' in client.get(f"/listing/{listing_id(client, '1')}").text
+
+
 # --- crawler disclosure ---------------------------------------------------
 
 

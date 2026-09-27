@@ -167,6 +167,26 @@ class SearchService:
             )
         )
 
+    def data_version(self) -> dict[str, object]:
+        """A cheap fingerprint of the published data.
+
+        The page polls this and compares it with the value it was
+        rendered from, so it can offer a refresh when something has
+        changed. Deliberately two cheap aggregates rather than a hash of
+        the rows.
+        """
+        published = Listing.is_published.is_(True)
+        count = (
+            self._session.scalar(select(func.count()).select_from(Listing).where(published)) or 0
+        )
+        newest = self._session.scalar(select(func.max(Listing.first_seen_at)).where(published))
+        changed = self._session.scalar(select(func.max(Listing.updated_at)).where(published))
+        return {
+            "count": count,
+            "newest": newest.isoformat() if newest else None,
+            "changed": changed.isoformat() if changed else None,
+        }
+
     def totals(self) -> dict[str, int]:
         published = select(func.count()).select_from(Listing).where(Listing.is_published.is_(True))
         return {

@@ -54,6 +54,30 @@ dl { margin: 0; }
 .header-stats { display: flex; gap: 22px; font-size: 13px; opacity: .9; }
 .header-stats b { font-size: 15px; }
 
+/* ---------- new data notice ---------- */
+/* Appears only when the collector has found something. Never reloads on
+   its own; the reader decides. */
+.update-notice {
+  background: #eaf1f8;
+  border-bottom: 1px solid #c3d8ea;
+  padding: 10px 0;
+  font-size: 14px;
+}
+.update-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.update-text { color: var(--brand); font-weight: 600; }
+.update-actions { display: flex; gap: 8px; }
+.update-notice button {
+  font: inherit; font-size: 13px; cursor: pointer;
+  padding: 5px 14px; border-radius: 7px; border: 1px solid transparent;
+}
+.update-refresh { background: var(--brand); color: #fff; font-weight: 600; }
+.update-refresh:hover { background: #0d4a80; }
+.update-dismiss { background: transparent; color: var(--ink-soft); border-color: #c3d8ea; }
+.update-dismiss:hover { background: #fff; }
+
 /* ---------- hero ---------- */
 .hero { background: #fff; border-bottom: 1px solid var(--line); padding: 30px 0 26px; }
 .hero h1 { font-size: 26px; }
