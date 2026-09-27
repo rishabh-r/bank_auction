@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     crawler_max_retries: int = Field(default=3, ge=0, le=10)
     crawler_respect_robots: bool = True
 
+    # URLs per source per scheduled run.
+    #
+    # Sized against the crawl delay: at one request every 3 seconds, 1500
+    # URLs is about 75 minutes of work, four times a day. That reaches full
+    # coverage of BAANKNET's ~72,000 properties in roughly a fortnight,
+    # while averaging well under one request per second - a rate a national
+    # portal will not notice. Lower it if a source asks us to slow down.
+    crawl_batch_size: int = Field(default=1500, ge=1)
+
     # --- Database ---------------------------------------------------------
     # Contains a password, so it is handled as a secret.
     database_url: SecretStr = SecretStr(

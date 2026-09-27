@@ -50,10 +50,6 @@ IST = "Asia/Kolkata"
 #: Listings auctioning within this window are re-checked hourly.
 IMMINENT_DAYS = 7
 
-#: URLs per source per scheduled crawl. Keeps each run bounded and the
-#: load on the source predictable.
-CRAWL_BATCH = 150
-
 
 def build_adapter(source_id: str, fetcher: Fetcher):
     def fetch_text(url: str) -> str:
@@ -65,10 +61,11 @@ def build_adapter(source_id: str, fetcher: Fetcher):
     return REGISTRY[source_id](fetch_text=fetch_text)
 
 
-def crawl_source(source_id: str, limit: int = CRAWL_BATCH) -> None:
+def crawl_source(source_id: str, limit: int | None = None) -> None:
     """Crawl one source and record how it went."""
     settings = get_settings()
     settings.ensure_directories()
+    limit = limit or settings.crawl_batch_size
     sessions = get_sessionmaker()
 
     started = time.monotonic()

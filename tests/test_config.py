@@ -52,6 +52,18 @@ def test_ensure_directories_is_idempotent(tmp_path):
     assert settings.raw_dir.is_dir()
 
 
+def test_crawl_batch_size_is_configurable():
+    """Tunable without a code change, so a source asking us to slow down
+    is a one-line edit to .env."""
+    assert Settings(**VALID).crawl_batch_size == 1500
+    assert Settings(**VALID, crawl_batch_size=200).crawl_batch_size == 200
+
+
+def test_crawl_batch_size_must_be_positive():
+    with pytest.raises(ValidationError):
+        Settings(**VALID, crawl_batch_size=0)
+
+
 def test_crawler_delay_cannot_be_impolite():
     """A sub-second delay is rejected at startup, not discovered in production."""
     with pytest.raises(ValidationError):
