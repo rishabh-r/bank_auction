@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+from auction_portal.config import get_settings
 from auction_portal.db.models import Listing
 from auction_portal.db.session import get_sessionmaker
 from auction_portal.normalise.dates import to_ist
@@ -140,6 +141,28 @@ def create_app() -> FastAPI:
             },
         )
 
+    @app.get("/bot", response_class=HTMLResponse)
+    def bot(request: Request):
+        """Crawler disclosure.
+
+        Referenced in the User-Agent of every request we make, so a site
+        owner who sees our traffic can find out who we are and how to stop
+        us. A crawler that can be contacted usually gets left alone; an
+        anonymous one gets blocked.
+        """
+        settings = get_settings()
+        return templates.TemplateResponse(
+            request,
+            "bot.html",
+            {
+                "user_agent": settings.user_agent,
+                "bot_name": settings.bot_name,
+                "contact_email": settings.contact_email,
+                "delay": int(settings.crawler_delay_seconds),
+                "disclaimer": DISCLAIMER,
+            },
+        )
+
     # --- JSON API ---------------------------------------------------------
 
     @app.get("/api/listings")
@@ -198,6 +221,16 @@ def create_app() -> FastAPI:
         # Listing pages carry no personal data, so they are indexable.
         # The API is not useful to a search engine.
         return "User-agent: *\nDisallow: /api/\nAllow: /\n"
+
+    @app.get("/.well-known/security.txt", response_class=PlainTextResponse)
+    def security_txt():
+        """RFC 9116: where to report a security problem."""
+        settings = get_settings()
+        return (
+            f"Contact: mailto:{settings.contact_email}\n"
+            f"Preferred-Languages: en\n"
+            f"Canonical: {str(settings.contact_url).rstrip('/')}/.well-known/security.txt\n"
+        )
 
     return app
 

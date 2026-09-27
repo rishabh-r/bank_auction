@@ -242,3 +242,40 @@ def test_robots_txt_allows_listings_but_not_the_api(client):
     body = client.get("/robots.txt").text
     assert "Disallow: /api/" in body
     assert "Allow: /" in body
+
+
+def test_security_txt_is_published(client):
+    body = client.get("/.well-known/security.txt").text
+    assert "Contact: mailto:" in body
+
+
+# --- crawler disclosure ---------------------------------------------------
+
+
+def test_bot_page_exists(client):
+    """CONTACT_URL points here, and it is sent with every request we make."""
+    assert client.get("/bot").status_code == 200
+
+
+def test_bot_page_shows_our_user_agent(client):
+    assert "AuctionPortalBot/" in client.get("/bot").text
+
+
+def test_bot_page_explains_how_to_block_us(client):
+    body = client.get("/bot").text
+    assert "robots.txt" in body
+    assert "Disallow: /" in body
+
+
+def test_bot_page_gives_a_contact_address(client):
+    assert "mailto:" in client.get("/bot").text
+
+
+def test_bot_page_states_we_do_not_publish_borrower_names(client):
+    body = client.get("/bot").text.lower()
+    assert "do not publish borrower" in body
+
+
+def test_bot_page_is_linked_from_every_page(client):
+    for path in ("/", f"/listing/{listing_id(client, '1')}"):
+        assert 'href="/bot"' in client.get(path).text

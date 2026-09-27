@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}About our crawler | Auction Portal{% endblock %}
+{% block description %}What AuctionPortalBot collects, how often, and how to ask it to stop.{% endblock %}
+
+{% block content %}
+<main class="wrap detail">
+  <header class="detail-head">
+    <div>
+      <h1>About our crawler</h1>
+      <p class="where">
+        This page is referenced in the <code>User-Agent</code> of every
+        request we make, so anyone seeing our traffic can find out who we
+        are and how to reach us.
+      </p>
+    </div>
+  </header>
+
+  <section class="panel">
+    <h2>Identifying us</h2>
+    <p>Every request we send carries:</p>
+    <pre style="background:#f4f7fa;border:1px solid #dde5ec;border-radius:8px;padding:12px;overflow-x:auto;font-size:13px">{{ user_agent }}</pre>
+  </section>
+
+  <section class="panel">
+    <h2>What we collect</h2>
+    <p>
+      Notices of auctions of property and vehicles that banks are
+      <strong>required by law to publish</strong> &mdash; principally under
+      Rule 8 of the Security Interest (Enforcement) Rules, 2002, made under
+      the SARFAESI Act, 2002.
+    </p>
+    <p>
+      We record the asset, its location, the reserve price, the EMD, the
+      auction and inspection dates, and which bank is selling. We then link
+      back to the original notice.
+    </p>
+    <p>
+      <strong>We do not publish borrower or guarantor names, or their
+      addresses.</strong> Those details are discarded at collection time
+      rather than hidden at display time, so they are not held in our
+      database at all. They add nothing for a prospective buyer, and
+      publishing that someone has defaulted causes real harm.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>How we behave</h2>
+    <dl>
+      <dt>robots.txt</dt>
+      <dd>Checked before every request and always honoured, including any
+        <code>Crawl-delay</code> you set.</dd>
+      <dt>Rate</dt>
+      <dd>At most one request every {{ delay }} seconds to any single site,
+        and never more than one request at a time.</dd>
+      <dt>Conditional requests</dt>
+      <dd>We send <code>ETag</code> and <code>If-Modified-Since</code>, so
+        if nothing has changed you only send us a <code>304</code> rather
+        than the file again.</dd>
+      <dt>Backing off</dt>
+      <dd>We slow down automatically when your server does, and we obey
+        <code>Retry-After</code>.</dd>
+      <dt>What we never do</dt>
+      <dd>We do not sign in, solve CAPTCHAs, bypass rate limits, rotate
+        addresses to evade blocks, or access anything behind a paywall.</dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <h2>Asking us to stop</h2>
+    <p>Either of these works, and the first needs nothing from us:</p>
+    <ol>
+      <li>
+        Add a rule to your <code>robots.txt</code>. We re-read it at least
+        hourly and will stop.
+        <pre style="background:#f4f7fa;border:1px solid #dde5ec;border-radius:8px;padding:12px;margin-top:8px;font-size:13px">User-agent: {{ bot_name }}
+Disallow: /</pre>
+      </li>
+      <li>
+        Email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+        We will stop crawling you, and remove what we already hold if you
+        ask.
+      </li>
+    </ol>
+  </section>
+
+  <section class="panel">
+    <h2>Removing a listing</h2>
+    <p>
+      If you are a bank, a borrower, or anyone else with an interest in a
+      listing and you want it taken down, email
+      <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> with the
+      listing address from this site. We aim to respond within
+      <strong>three working days</strong>.
+    </p>
+    <p class="fine">
+      We remove concluded auctions from public search automatically after
+      90 days in any case.
+    </p>
+  </section>
+
+  <section class="panel">
+    <h2>What we are not</h2>
+    <p>
+      We are not a bank, and we are not affiliated with any bank. We do not
+      run auctions, register bidders, accept EMD or handle any payment.
+      This site is an index that points at notices banks have already
+      published.
+    </p>
+  </section>
+</main>
+{% endblock %}
