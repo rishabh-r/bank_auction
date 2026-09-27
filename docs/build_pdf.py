@@ -96,7 +96,7 @@ def build(md_path: pathlib.Path) -> pathlib.Path:
 if __name__ == "__main__":
     if not CHROME.exists():
         sys.exit(f"Chrome not found at {CHROME}")
-    for name in ("bank-auction-portal-full.md", "bank-auction-portal-summary.md"):
-        out = build(DOCS / name)
-        size_kb = out.stat().st_size / 1024
-        print(f"{out.name:40s} {size_kb:8.1f} KB")
+    # Every markdown file in docs/ becomes a PDF beside it.
+    for path in sorted(DOCS.glob("*.md")):
+        out = build(path)
+        print(f"{out.name:40s} {out.stat().st_size / 1024:8.1f} KB")

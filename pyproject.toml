@@ -26,6 +26,7 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "ruff==0.16.9",
+    "Markdown==3.11",  # docs/build_pdf.py
 ]
 
 [tool.setuptools.packages.find]

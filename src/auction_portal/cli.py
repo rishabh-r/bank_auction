@@ -438,6 +438,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The Windows console defaults to cp1252, which cannot encode the
+    # rupee sign or Indic script in a property address. Without this a
+    # listing from the wrong state crashes the command.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     args = build_parser().parse_args(argv)
     configure_logging("DEBUG" if args.verbose else None)
     return args.func(args)
