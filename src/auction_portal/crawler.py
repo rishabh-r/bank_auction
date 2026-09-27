@@ -9,11 +9,13 @@ the database consistent, and re-running it skips everything already done.
 import logging
 from dataclasses import dataclass, field
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from auction_portal.archiver import Archiver
 from auction_portal.config import Settings, get_settings
 from auction_portal.db.listing_repository import ListingRepository
+from auction_portal.db.models import UrlStateRow
 from auction_portal.db.repository import DocumentRepository
 from auction_portal.db.session import get_sessionmaker
 from auction_portal.fetching.models import FetchOutcome, RawDocument
@@ -61,9 +63,19 @@ class Crawler:
     def run(self, limit: int | None = None, skip_unchanged: bool = True) -> CrawlReport:
         report = CrawlReport(source_id=self._adapter.source_id)
 
-        urls = self._adapter.discover(limit=limit)
+        # Discover everything, then choose. Asking the adapter for only the
+        # first N would return the same N pages on every run, so a
+        # scheduled crawl would never reach the rest of the source.
+        available = self._adapter.discover()
+        urls = self._prioritise(available, limit)
+
         report.discovered = len(urls)
-        log.info("%s: %d urls to consider", self._adapter.source_id, len(urls))
+        log.info(
+            "%s: %d urls available, %d selected for this run",
+            self._adapter.source_id,
+            len(available),
+            len(urls),
+        )
 
         for position, url in enumerate(urls, start=1):
             try:
@@ -79,6 +91,42 @@ class Crawler:
 
         log.info("done - %s", report.summary())
         return report
+
+    def _prioritise(self, urls: list[str], limit: int | None) -> list[str]:
+        """Order URLs so repeated runs make progress through the source.
+
+        Never-fetched pages come first, then the least recently fetched.
+        Over successive runs this walks the whole source and then keeps it
+        refreshed, oldest first, instead of hammering the same first page
+        of the sitemap forever.
+        """
+        if limit is None or limit >= len(urls):
+            return urls
+
+        with self._sessions() as session:
+            rows = session.execute(
+                select(UrlStateRow.url, UrlStateRow.last_fetched_at).where(
+                    UrlStateRow.source_id == self._adapter.source_id
+                )
+            ).all()
+        last_fetched = dict(rows)
+
+        unseen = [url for url in urls if url not in last_fetched]
+        if len(unseen) >= limit:
+            return unseen[:limit]
+
+        # Top up with the stalest of the pages we already hold.
+        seen = sorted(
+            (url for url in urls if url in last_fetched),
+            key=lambda url: last_fetched[url],
+        )
+        selected = unseen + seen[: limit - len(unseen)]
+        log.info(
+            "  %d never fetched, %d refreshed oldest-first",
+            len(unseen),
+            len(selected) - len(unseen),
+        )
+        return selected
 
     def _process(self, url: str, report: CrawlReport, skip_unchanged: bool) -> None:
         result = self._archiver.archive(url, source_id=self._adapter.source_id)
