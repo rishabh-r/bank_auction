@@ -32,7 +32,15 @@ dist/
 htmlcov/
 
 # ---- Editors / OS --------------------------------------------------------
-.vscode/
+# The four .vscode files below are shared project configuration - the
+# interpreter, the debug and task definitions - so everyone gets the same
+# F5 and the same test runner. Anything else VS Code drops in there is
+# personal (window layout, per-user overrides) and stays ignored.
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+!.vscode/extensions.json
 .idea/
 Thumbs.db
 desktop.ini

@@ -189,6 +189,34 @@ What every page guarantees, and what the tests enforce:
 
 ---
 
+## Running it from the editor
+
+The commands above all have an equivalent in VS Code or Cursor, so none of
+them has to be typed. The configuration lives in `.vscode/` and is
+committed, so it works on a fresh clone once the venv exists.
+
+Start the database first. It is not a Windows service and does not come up
+on boot: press `Ctrl+Shift+P`, choose **Tasks: Run Task**, then **Start
+database**. Do this once per reboot.
+
+Then press `F5` and pick a configuration. **Portal (web server)** serves
+the site at http://127.0.0.1:8000 with breakpoints working; there is an
+auto-reload variant for when you are editing templates rather than
+debugging, since uvicorn's reloader and the debugger do not coexist.
+The rest of the list covers the scheduler, both crawlers, `reparse`, the
+health check, the dedup report and `stats`. **Debug current test file**
+runs pytest on whichever file is open.
+
+The same **Tasks: Run Task** menu holds the things that are not
+debugging: starting, stopping and checking the database, applying
+migrations, running the tests, linting, formatting, and building the
+documentation PDFs.
+
+The Testing sidebar (the flask icon) discovers the suite and runs it, or
+any single test, with a click. Failures link straight to the line.
+
+---
+
 ## Running unattended
 
 `auction_portal schedule` runs everything on a timer:

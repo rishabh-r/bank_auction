@@ -1,0 +1,115 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Portal (web server)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["serve"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Portal (web server, auto-reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["serve", "--reload"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Scheduler",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["schedule"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Crawl BAANKNET properties",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["crawl", "baanknet", "--limit", "20"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Crawl BAANKNET vehicles",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["crawl", "baanknet_vehicle", "--limit", "20"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Reparse archived documents (offline)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["reparse", "baanknet"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Health check",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["health"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Dedup report",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["dedup"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Show stats",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "auction_portal",
+      "args": ["stats"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Debug current test file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}"],
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}
