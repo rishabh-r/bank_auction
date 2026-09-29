@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     )
     db_echo: bool = False  # set true to log every SQL statement
 
+    # Set true on serverless hosts such as Vercel. Each instance then
+    # opens and closes its own connection instead of holding a pool,
+    # which would otherwise exhaust the database's connection limit
+    # across many short-lived instances.
+    db_serverless: bool = False
+
     # Read by docker-compose.yml, not by the application. Declared here so
     # that a .env copied from .env.example still validates - extra="forbid"
     # would otherwise reject it.

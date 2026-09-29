@@ -7,13 +7,22 @@ from functools import lru_cache
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from auction_portal.config import Settings, get_settings
 
 log = logging.getLogger(__name__)
 
 
-def build_engine(url: str, echo: bool = False) -> Engine:
+def build_engine(url: str, echo: bool = False, serverless: bool = False) -> Engine:
+    if serverless:
+        # Serverless functions are short-lived and numerous. Holding a
+        # pool per instance would exhaust the database's connection limit
+        # long before traffic justified it, so each request opens and
+        # closes its own connection and we let the provider's pooler do
+        # the pooling.
+        return create_engine(url, echo=echo, poolclass=NullPool, pool_pre_ping=True)
+
     return create_engine(
         url,
         echo=echo,
@@ -33,7 +42,11 @@ def build_engine(url: str, echo: bool = False) -> Engine:
 def get_engine() -> Engine:
     settings: Settings = get_settings()
     log.debug("connecting to %s", settings.safe_database_url)
-    return build_engine(settings.database_url.get_secret_value(), echo=settings.db_echo)
+    return build_engine(
+        settings.database_url.get_secret_value(),
+        echo=settings.db_echo,
+        serverless=settings.db_serverless,
+    )
 
 
 @lru_cache(maxsize=1)

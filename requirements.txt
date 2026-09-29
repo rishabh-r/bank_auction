@@ -1,0 +1,17 @@
+# Runtime dependencies for the Vercel deployment.
+#
+# Vercel's Python runtime installs from this file. It mirrors the
+# `dependencies` list in pyproject.toml, which remains the source of
+# truth for local development - keep the two in step when upgrading.
+#
+# Deliberately omitted: apscheduler. The scheduler does not run on
+# Vercel, so shipping it would only slow cold starts.
+
+pydantic-settings==2.15.0
+email-validator==2.3.0
+httpx==0.28.1
+SQLAlchemy==2.1.1
+alembic==1.20.0
+psycopg[binary]==3.3.6
+fastapi==0.141.1
+Jinja2==3.1.6
