@@ -25,13 +25,23 @@
       </div>
       {% endif %}
     </div>
+    {% if version %}
+    {# Says what the page is doing, so "nothing new" is distinguishable
+       from "nothing is running". #}
+    <div class="wrap heartbeat" id="update-heartbeat">
+      <span class="beat-dot" aria-hidden="true"></span>
+      <span class="beat-text">Watching for new listings</span>
+      <span class="beat-collected"></span>
+    </div>
+    {% endif %}
   </header>
 
   {% if version %}
   <div id="update-notice" class="update-notice" role="status" aria-live="polite" hidden
        data-count="{{ version.count }}"
        data-newest="{{ version.newest or '' }}"
-       data-changed="{{ version.changed or '' }}">
+       data-changed="{{ version.changed or '' }}"
+       data-collected="{{ version.collected or '' }}">
     <div class="wrap update-inner">
       <span class="update-text"></span>
       <span class="update-actions">

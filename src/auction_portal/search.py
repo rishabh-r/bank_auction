@@ -15,7 +15,7 @@ from typing import Literal
 from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session
 
-from auction_portal.db.models import Listing
+from auction_portal.db.models import Listing, SourceHealth
 
 SortOption = Literal["auction_date", "price_low", "price_high", "newest", "relevance"]
 
@@ -181,10 +181,16 @@ class SearchService:
         )
         newest = self._session.scalar(select(func.max(Listing.first_seen_at)).where(published))
         changed = self._session.scalar(select(func.max(Listing.updated_at)).where(published))
+        # When the collector last ran. Shown to the reader so that
+        # "nothing new today" can be told apart from "nothing has been
+        # running for three days", which otherwise look identical.
+        collected = self._session.scalar(select(func.max(SourceHealth.ran_at)))
+
         return {
             "count": count,
             "newest": newest.isoformat() if newest else None,
             "changed": changed.isoformat() if changed else None,
+            "collected": collected.isoformat() if collected else None,
         }
 
     def totals(self) -> dict[str, int]:

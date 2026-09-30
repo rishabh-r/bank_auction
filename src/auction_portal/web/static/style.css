@@ -54,6 +54,32 @@ dl { margin: 0; }
 .header-stats { display: flex; gap: 22px; font-size: 13px; opacity: .9; }
 .header-stats b { font-size: 15px; }
 
+/* ---------- heartbeat ---------- */
+/* A quiet line saying what the page is doing. Present so that "nothing
+   new" and "nothing is running" are distinguishable; the second is a
+   fault and should not look like silence. */
+.heartbeat {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 20px 0;
+  font-size: 12px; color: rgba(255,255,255,.62);
+}
+.beat-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: #6fc28b;
+}
+.heartbeat.is-checking .beat-dot { background: #f0c05a; animation: beat 1s ease-in-out infinite; }
+.heartbeat.is-stalled .beat-dot { background: #e08376; }
+.heartbeat.is-stalled { color: #f3b6ad; }
+.beat-collected.is-stale { color: #f0c05a; }
+
+@keyframes beat {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .4; transform: scale(.75); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .heartbeat.is-checking .beat-dot { animation: none; }
+}
+
 /* ---------- new data notice ---------- */
 /* Appears only when the collector has found something. Never reloads on
    its own; the reader decides. */

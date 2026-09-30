@@ -283,6 +283,28 @@ def test_pages_carry_the_version_for_the_browser_to_compare(client):
     assert "data-count=" in body
 
 
+def test_version_reports_when_the_collector_last_ran(client):
+    """'Nothing new' and 'nothing is running' look identical without
+    this, and the second one is a fault."""
+    assert "collected" in client.get("/api/version").json()
+
+
+def test_pages_show_a_heartbeat(client):
+    """Silence is ambiguous: the reader cannot tell a quiet hour from a
+    dead collector."""
+    body = client.get("/").text
+    assert 'id="update-heartbeat"' in body
+    assert "Watching for new listings" in body
+
+
+def test_heartbeat_carries_the_last_collection_time(client):
+    assert "data-collected=" in client.get("/").text
+
+
+def test_heartbeat_appears_on_detail_pages_too(client):
+    assert 'id="update-heartbeat"' in client.get(f"/listing/{listing_id(client, '1')}").text
+
+
 def test_the_notice_starts_hidden(client):
     """It must only appear once something has actually changed."""
     body = client.get("/").text
