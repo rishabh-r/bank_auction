@@ -140,6 +140,33 @@ def test_default_sort_is_soonest_auction_first(seeded):
     assert dates == sorted(dates)
 
 
+def test_finished_auctions_sort_below_upcoming_ones(db_session):
+    """Ascending on the raw date puts last month's finished auctions at
+    the top, which is useless to someone looking to buy."""
+    repo = ListingRepository(db_session)
+    repo.upsert(make("past", auction_start_at=NOW - timedelta(days=5)))
+    repo.upsert(make("soon", auction_start_at=NOW + timedelta(days=2)))
+    repo.upsert(make("later", auction_start_at=NOW + timedelta(days=40)))
+    db_session.commit()
+
+    listings = SearchService(db_session).search(SearchQuery()).listings
+    order = [listing.external_id for listing in listings]
+
+    assert order == ["soon", "later", "past"]
+
+
+def test_finished_auctions_sort_last_even_if_the_job_has_not_run(db_session):
+    """Ordering is driven by the date, not the stored status, so a
+    stalled maintenance job does not push stale listings to the top."""
+    repo = ListingRepository(db_session)
+    repo.upsert(make("stale", auction_start_at=NOW - timedelta(days=5), status="upcoming"))
+    repo.upsert(make("real", auction_start_at=NOW + timedelta(days=2)))
+    db_session.commit()
+
+    listings = SearchService(db_session).search(SearchQuery()).listings
+    assert [listing.external_id for listing in listings] == ["real", "stale"]
+
+
 def test_pagination_splits_results(seeded):
     first = seeded.search(SearchQuery(page=1, page_size=2))
     second = seeded.search(SearchQuery(page=2, page_size=2))

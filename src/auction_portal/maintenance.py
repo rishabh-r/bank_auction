@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from auction_portal.crawler import CrawlReport
@@ -91,6 +91,43 @@ def advance_statuses(session: Session, now: datetime | None = None) -> dict[str,
     if any(changed.values()):
         log.info("status changes: %s", changed)
     return changed
+
+
+def count_stale_statuses(session: Session, now: datetime | None = None) -> int:
+    """Listings whose stored status disagrees with the clock.
+
+    Pages derive what they display, so a reader never sees a stale
+    status. But a rising count here means advance_statuses has stopped
+    running, and filtering by status will be returning wrong results
+    even though the pages look right. Worth alerting on.
+    """
+    now = now or datetime.now(UTC)
+    return (
+        session.scalar(
+            select(func.count())
+            .select_from(Listing)
+            .where(
+                or_(
+                    and_(
+                        Listing.status == "upcoming",
+                        Listing.auction_start_at.is_not(None),
+                        Listing.auction_start_at <= now,
+                    ),
+                    and_(
+                        Listing.status == "live",
+                        Listing.auction_end_at.is_not(None),
+                        Listing.auction_end_at < now,
+                    ),
+                    and_(
+                        Listing.status == "live",
+                        Listing.auction_end_at.is_(None),
+                        Listing.auction_start_at < now - timedelta(days=1),
+                    ),
+                )
+            )
+        )
+        or 0
+    )
 
 
 def expire_old(

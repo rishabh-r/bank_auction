@@ -10,6 +10,7 @@ from auction_portal.maintenance import (
     STALE_SOURCE_HOURS,
     advance_statuses,
     check_health,
+    count_stale_statuses,
     expire_old,
     record_health,
 )
@@ -94,6 +95,63 @@ def test_unscheduled_listings_are_left_alone(db_session):
     advance_statuses(db_session, now=NOW)
 
     assert status_of(db_session, "1") == "unscheduled"
+
+
+def test_displayed_status_is_right_even_when_the_job_has_not_run(db_session):
+    """The bug this guards against: 439 finished auctions shown as
+    'upcoming' because the maintenance job had not run since a reboot.
+
+    Pages derive status from the clock, so a stalled job degrades
+    filtering rather than lying to a reader.
+    """
+    store(db_session, parsed("1", auction_start_at=NOW - timedelta(days=2)))
+    listing = ListingRepository(db_session).get("baanknet", "1")
+
+    assert listing.status == "upcoming"  # stored value is stale
+    assert listing.effective_status == "closed"  # what a reader sees
+    assert listing.status_is_stale is True
+
+
+def test_displayed_status_matches_stored_once_the_job_runs(db_session):
+    store(db_session, parsed("1", auction_start_at=NOW - timedelta(days=2)))
+    advance_statuses(db_session, now=NOW)
+    db_session.flush()
+
+    listing = ListingRepository(db_session).get("baanknet", "1")
+    assert listing.status_is_stale is False
+
+
+def test_a_cancelled_auction_is_not_revived_by_the_clock(db_session):
+    """Time cannot un-cancel an auction."""
+    store(
+        db_session,
+        parsed("1", status="cancelled", auction_start_at=NOW + timedelta(days=5)),
+    )
+    listing = ListingRepository(db_session).get("baanknet", "1")
+
+    assert listing.effective_status == "cancelled"
+
+
+def test_unscheduled_listings_have_no_derived_status(db_session):
+    store(db_session, parsed("1", status="unscheduled", auction_start_at=None))
+    listing = ListingRepository(db_session).get("baanknet", "1")
+
+    assert listing.effective_status == "unscheduled"
+
+
+def test_stale_statuses_are_countable_for_alerting(db_session):
+    store(
+        db_session,
+        parsed("1", auction_start_at=NOW - timedelta(days=2)),
+        parsed("2", auction_start_at=NOW - timedelta(days=5)),
+        parsed("3", auction_start_at=NOW + timedelta(days=5)),  # genuinely upcoming
+    )
+
+    assert count_stale_statuses(db_session, now=NOW) == 2
+
+    advance_statuses(db_session, now=NOW)
+    db_session.flush()
+    assert count_stale_statuses(db_session, now=NOW) == 0
 
 
 def test_advancing_statuses_twice_changes_nothing_the_second_time(db_session):

@@ -113,7 +113,7 @@
         <a class="card-link" href="/listing/{{ listing.id }}">
           <div class="card-head">
             <h2>{{ listing.title or 'Property' }}</h2>
-            <span class="status status-{{ listing.status }}">{{ listing.status }}</span>
+            <span class="status status-{{ listing.effective_status }}">{{ listing.effective_status }}</span>
           </div>
 
           <p class="where">

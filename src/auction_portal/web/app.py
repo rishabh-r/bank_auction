@@ -286,7 +286,10 @@ def _serialise(listing: Listing) -> dict:
         "branch_name": listing.branch_name,
         "possession_type": listing.possession_type,
         "legal_basis": listing.legal_basis,
-        "status": listing.status,
+        # Derived from the clock rather than from when the maintenance
+        # job last ran, so a finished auction is never reported as
+        # upcoming. See Listing.effective_status.
+        "status": listing.effective_status,
         "confidence": float(listing.confidence),
         "source": {
             "source_id": listing.source_id,

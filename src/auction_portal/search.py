@@ -12,7 +12,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from auction_portal.db.models import Listing
@@ -253,8 +253,25 @@ class SearchService:
             rank = func.ts_rank(
                 Listing.search_vector, func.websearch_to_tsquery("simple", query.text)
             )
-            return stmt.order_by(rank.desc(), Listing.auction_start_at.asc().nulls_last())
-        return stmt.order_by(Listing.auction_start_at.asc().nulls_last(), Listing.id)
+            return stmt.order_by(rank.desc(), self._soonest_first())
+
+        return stmt.order_by(self._concluded_last(), self._soonest_first(), Listing.id)
+
+    @staticmethod
+    def _concluded_last():
+        """Auctions that have already begun sort to the bottom.
+
+        'Soonest first' ascending on the raw date puts last month's
+        finished auctions at the top, which is the opposite of what
+        someone looking to buy wants. Driven by the date rather than the
+        stored status so it stays right even if the maintenance job has
+        not run.
+        """
+        return case((Listing.auction_start_at < func.now(), 1), else_=0)
+
+    @staticmethod
+    def _soonest_first():
+        return Listing.auction_start_at.asc().nulls_last()
 
     def _facets(self, query: SearchQuery) -> dict[str, list[Facet]]:
         """Counts per facet value.

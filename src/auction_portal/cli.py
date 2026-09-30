@@ -41,6 +41,7 @@ from auction_portal.logging_setup import configure_logging
 from auction_portal.maintenance import (
     advance_statuses,
     check_health,
+    count_stale_statuses,
     expire_old,
     record_health,
 )
@@ -255,6 +256,13 @@ def _cmd_health(args: argparse.Namespace) -> int:
             mark = "ok  " if verdict.ok else "FAIL"
             last = verdict.last_run.strftime("%d %b %H:%M") if verdict.last_run else "never"
             print(f"  [{mark}] {verdict.source_id:<20} {verdict.reason:<38} last run {last}")
+
+        stale = count_stale_statuses(session)
+        if stale:
+            print()
+            print(f"  [WARN] {stale:,} listings have a stale stored status.")
+            print("         Pages show the right thing, but filtering by status")
+            print("         will be wrong. Run: auction_portal maintain")
 
         recent = session.scalars(
             select(SourceHealth).order_by(SourceHealth.ran_at.desc()).limit(8)

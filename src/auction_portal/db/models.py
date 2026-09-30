@@ -10,7 +10,7 @@ The design rule that shapes both: rows here are append-mostly. We record
 what happened, we do not overwrite history.
 """
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -34,6 +34,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
     pass
+
+
+#: Outcomes that the passage of time cannot change. A cancelled auction
+#: does not become 'live' because its start time arrived.
+_TERMINAL_STATUSES = frozenset({"cancelled", "withdrawn", "stayed", "sold", "unknown"})
 
 
 class SourceDocument(Base):
@@ -244,6 +249,43 @@ class Listing(Base):
         Index("ix_listing_bank", "bank_name"),
         Index("ix_listing_search", "search_vector", postgresql_using="gin"),
     )
+
+    @property
+    def effective_status(self) -> str:
+        """Status worked out from the clock, not from when a job last ran.
+
+        The stored `status` column exists so that status can be indexed
+        and filtered cheaply, and a scheduled job keeps it current. But
+        it is only ever as fresh as the last time that job ran, and a
+        portal that calls an auction 'upcoming' two days after it
+        finished loses a reader's trust immediately.
+
+        So anything shown to a reader uses this instead. The column stays
+        for querying; this is the truth for display.
+
+        States that a date cannot contradict - cancelled, withdrawn,
+        stayed, sold - are returned unchanged.
+        """
+        if self.status in _TERMINAL_STATUSES or self.auction_start_at is None:
+            return self.status
+
+        now = datetime.now(UTC)
+        if now < self.auction_start_at:
+            return "upcoming"
+        if self.auction_end_at is not None:
+            return "live" if now <= self.auction_end_at else "closed"
+        # Started, with no end time published. Assume a single day rather
+        # than leaving it 'live' indefinitely.
+        return "live" if now < self.auction_start_at + timedelta(days=1) else "closed"
+
+    @property
+    def status_is_stale(self) -> bool:
+        """True when the stored status disagrees with the clock.
+
+        Surfaced in the health check: a rising count means the
+        maintenance job has stopped running.
+        """
+        return self.status != self.effective_status
 
     def __repr__(self) -> str:
         return (
