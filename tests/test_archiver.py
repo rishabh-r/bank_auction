@@ -80,6 +80,29 @@ def test_refetching_identical_content_stores_nothing_new(settings, db_session_fa
         assert state.unchanged_streak == 1
 
 
+def test_a_ticking_visitor_counter_does_not_archive_a_new_copy(settings, db_session_factory):
+    """The bug this guards against: a site-wide counter in every page
+    meant each hourly refresh archived a fresh copy of all 219 imminent
+    listings, roughly 630 MB a day of identical notices."""
+    counter = [2800055]
+
+    def handler(request):
+        counter[0] += 137
+        body = f"<span>Visitor Count:</span><span>{counter[0]}</span> notice".encode()
+        return httpx.Response(200, content=body, headers=PDF)
+
+    archiver = build_archiver(settings, handler, db_session_factory)
+    first = archiver.archive(URL, source_id="testbank")
+    second = archiver.archive(URL, source_id="testbank")
+    third = archiver.archive(URL, source_id="testbank")
+
+    assert first.outcome is FetchOutcome.NEW
+    assert second.outcome is FetchOutcome.UNCHANGED
+    assert third.outcome is FetchOutcome.UNCHANGED
+    assert counts(db_session_factory) == (1, 1)
+    assert archiver.store.count() == 1
+
+
 def test_changed_content_is_archived_as_a_new_version(settings, db_session_factory):
     """A corrigendum must be kept alongside the original, not replace it."""
     bodies = [b"Reserve Price Rs.3,37,55,000", b"Reserve Price Rs.2,90,00,000"]

@@ -116,6 +116,30 @@ class DocumentRepository:
         record = self._session.get(SourceDocument, document_id)
         return record, changed
 
+    def record_unchanged_fetch(self, document: RawDocument) -> None:
+        """Note a fetch whose content had not meaningfully changed.
+
+        No new source_documents row: the bytes differ only in noise such
+        as a visitor counter, so a new row would claim a version that
+        does not exist. The existing one has its last_seen_at bumped.
+        """
+        now = datetime.now(UTC)
+
+        state = self._session.get(UrlStateRow, document.url)
+        if state is None:
+            return
+
+        state.last_fetched_at = now
+        state.fetch_count += 1
+        state.unchanged_streak += 1
+        state.etag = document.etag
+        state.last_modified = document.last_modified
+
+        if state.current_document_id is not None:
+            existing = self._session.get(SourceDocument, state.current_document_id)
+            if existing is not None:
+                existing.last_seen_at = now
+
     def touch_url(self, url: str) -> None:
         """Server replied 304: we checked, nothing changed, nothing downloaded."""
         state = self._session.get(UrlStateRow, url)
@@ -142,6 +166,7 @@ class DocumentRepository:
                     url=document.url,
                     source_id=document.source_id,
                     content_sha256=document.sha256,
+                    canonical_sha256=document.canonical_sha256,
                     storage_key=storage_key,
                     etag=document.etag,
                     last_modified=document.last_modified,
@@ -155,7 +180,10 @@ class DocumentRepository:
             )
             return True
 
-        changed = state.content_sha256 != document.sha256
+        # Canonical hash: ignores per-request noise such as a visitor
+        # counter, so only a real republication counts as a change.
+        previous = state.canonical_sha256 or state.content_sha256
+        changed = previous != document.canonical_sha256
 
         state.last_fetched_at = now
         state.fetch_count += 1
@@ -165,6 +193,7 @@ class DocumentRepository:
         if changed:
             log.info("content changed at %s", document.url)
             state.content_sha256 = document.sha256
+            state.canonical_sha256 = document.canonical_sha256
             state.storage_key = storage_key
             state.last_changed_at = now
             state.current_document_id = document_id

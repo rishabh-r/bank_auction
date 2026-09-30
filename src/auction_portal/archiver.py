@@ -45,7 +45,7 @@ class Archiver:
             state = DocumentRepository(session).get_url_state(url)
             etag = state.etag if state else None
             last_modified = state.last_modified if state else None
-            known_hash = state.content_sha256 if state else None
+            known_hash = state.canonical_sha256 or state.content_sha256 if state else None
             known_key = state.storage_key if state else None
 
         result = self._fetcher.fetch(
@@ -62,21 +62,34 @@ class Archiver:
 
         document = result.document
 
+        # Compared on the canonical hash, not the raw one. Some sources
+        # embed a visitor counter or similar in every page, so the bytes
+        # differ on every fetch while the notice itself has not changed.
+        #
         # Write the bytes before the database row. If the process dies in
         # between we get an unreferenced file, which is harmless; the reverse
         # would leave a row pointing at a file that does not exist.
-        if known_hash == document.sha256 and known_key:
-            storage_key = known_key
-            outcome = FetchOutcome.UNCHANGED
+        if known_hash == document.canonical_sha256 and known_key:
+            # Nothing meaningful changed. No new file and no new
+            # source_documents row, because there is no new version to
+            # record - only a note that we looked.
             log.info("unchanged: %s", url)
-        else:
-            storage_key = self._store.save(document)
-            outcome = FetchOutcome.NEW
+            with self._sessions.begin() as session:
+                DocumentRepository(session).record_unchanged_fetch(document)
+            return FetchResult(
+                outcome=FetchOutcome.UNCHANGED,
+                url=url,
+                document=document,
+                storage_key=known_key,
+            )
 
+        storage_key = self._store.save(document)
         with self._sessions.begin() as session:
             DocumentRepository(session).record_document(document, storage_key)
 
-        return FetchResult(outcome=outcome, url=url, document=document, storage_key=storage_key)
+        return FetchResult(
+            outcome=FetchOutcome.NEW, url=url, document=document, storage_key=storage_key
+        )
 
     @property
     def store(self) -> RawStore:

@@ -1,6 +1,7 @@
 """Data structures for fetched content."""
 
 import hashlib
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -21,6 +22,24 @@ _EXTENSIONS = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
 }
+
+
+#: Fragments that change on every request without the page's meaning
+#: changing. Removed before computing the change-detection hash.
+#:
+#: BAANKNET renders a site-wide visitor counter into every page, so two
+#: fetches of an untouched listing differ by a handful of digits. Without
+#: this, each hourly refresh would archive a fresh copy of every page -
+#: roughly 630 MB a day carrying no information.
+#:
+#: Kept deliberately narrow. Over-matching here would hide a genuine
+#: change, which is far worse than storing a duplicate.
+_VOLATILE_FRAGMENTS: tuple[re.Pattern[bytes], ...] = (
+    # "Visitor Count:</span><span ...>2813191</span>"
+    re.compile(rb"(itor Count.{0,200}?)\d{4,}", re.DOTALL),
+    # The same number again inside the Next.js payload.
+    re.compile(rb'(\\"children\\":)\d{6,}(\]\]\}\],\[\\"\$\\",\\"div)'),
+)
 
 
 class FetchOutcome(StrEnum):
@@ -53,8 +72,22 @@ class RawDocument:
 
     @cached_property
     def sha256(self) -> str:
-        """Content fingerprint. Identical bytes always give an identical hash."""
+        """Fingerprint of the exact bytes, for integrity and addressing."""
         return hashlib.sha256(self.content).hexdigest()
+
+    @cached_property
+    def canonical_sha256(self) -> str:
+        """Fingerprint ignoring content that changes on every request.
+
+        Used to decide whether a page has *meaningfully* changed.
+        `sha256` remains the true hash of what we stored; this is only
+        for change detection, so a visitor counter ticking over does not
+        look like a republished notice.
+        """
+        content = self.content
+        for pattern in _VOLATILE_FRAGMENTS:
+            content = pattern.sub(rb"\g<1>", content)
+        return hashlib.sha256(content).hexdigest()
 
     @property
     def size_bytes(self) -> int:

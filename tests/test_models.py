@@ -48,6 +48,33 @@ def test_extension_from_mime_type(mime, extension):
     assert make_doc(mime=mime).extension == extension
 
 
+def test_visitor_counter_does_not_count_as_a_change():
+    """BAANKNET renders a site-wide visitor counter into every page, so
+    two fetches of an untouched listing differ by a few digits. Treating
+    that as a change archived a fresh copy of every page every hour -
+    about 630 MB a day carrying no information.
+    """
+    before = b'<span>Visitor Count:</span><span class="ml-1">2800055</span>'
+    after = b'<span>Visitor Count:</span><span class="ml-1">2813191</span>'
+
+    assert make_doc(before).sha256 != make_doc(after).sha256  # bytes differ
+    assert make_doc(before).canonical_sha256 == make_doc(after).canonical_sha256
+
+
+def test_a_real_change_is_still_detected():
+    """The stripping must be narrow enough that a republished notice
+    still registers. Hiding a change is far worse than a duplicate."""
+    before = b"<span>Visitor Count:</span><span>2800055</span> Reserve Price Rs.3,37,55,000"
+    after = b"<span>Visitor Count:</span><span>2813191</span> Reserve Price Rs.2,90,00,000"
+
+    assert make_doc(before).canonical_sha256 != make_doc(after).canonical_sha256
+
+
+def test_canonical_hash_equals_plain_hash_when_nothing_is_volatile():
+    doc = make_doc(b"an ordinary notice with no counter")
+    assert doc.canonical_sha256 == doc.sha256
+
+
 def test_document_is_immutable():
     """Archived bytes must never be editable in place."""
     doc = make_doc()

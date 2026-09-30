@@ -101,6 +101,10 @@ class UrlStateRow(Base):
     source_id: Mapped[str] = mapped_column(String(64), nullable=False)
 
     content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Hash with per-request noise removed. Compared instead of
+    # content_sha256 when deciding whether a page really changed, so a
+    # visitor counter ticking over does not archive a fresh copy.
+    canonical_sha256: Mapped[str | None] = mapped_column(String(64))
     storage_key: Mapped[str] = mapped_column(Text, nullable=False)
 
     etag: Mapped[str | None] = mapped_column(String(256))
