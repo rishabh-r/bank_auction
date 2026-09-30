@@ -88,7 +88,10 @@
     var added = version.count - baseline.count;
     if (added > 0) return plural(added, "new listing") + " since you opened this page.";
     if (added < 0) return plural(-added, "listing") + " no longer listed.";
-    return "Some listings have been updated.";
+    // The count is unchanged but a timestamp moved. Something was
+    // touched; whether it affects what this reader is looking at is not
+    // something we can tell from the fingerprint, so do not claim it.
+    return "Some listings may be updated.";
   }
 
   function changed(version) {
