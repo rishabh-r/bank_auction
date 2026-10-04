@@ -17,7 +17,9 @@
 
 param(
     [switch]$Remove,
-    [switch]$Status
+    [switch]$Status,
+    [switch]$Disable,
+    [switch]$Enable
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,6 +49,30 @@ function Show-Status {
 
 if ($Status) {
     Write-Output ""
+    Show-Status
+    Write-Output ""
+    return
+}
+
+# Disable rather than remove when you want to stop it starting with
+# Windows but keep the configuration. -Enable puts it back.
+if ($Disable -or $Enable) {
+    if (-not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
+        Write-Output "`n  $TaskName is not installed`n"
+        return
+    }
+    if ($Disable) {
+        Disable-ScheduledTask -TaskName $TaskName | Out-Null
+        Write-Output "`n  $TaskName disabled - it will no longer start with Windows."
+        Write-Output "  Start things by hand with:"
+        Write-Output "    python scripts\setup_postgres.py --start"
+        Write-Output "    python -m auction_portal serve"
+        Write-Output "  Re-enable with: install_autostart.ps1 -Enable`n"
+    }
+    else {
+        Enable-ScheduledTask -TaskName $TaskName | Out-Null
+        Write-Output "`n  $TaskName enabled - it will start at your next logon.`n"
+    }
     Show-Status
     Write-Output ""
     return
