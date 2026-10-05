@@ -1,16 +1,20 @@
-# Production-shaped deployment: database, web portal, scheduler.
+# Production deployment: database, web portal, collector, reverse proxy.
 #
-# Three processes, deliberately separate:
+# Four processes, deliberately separate:
 #   postgres   the database
 #   web        serves the portal; never does slow work
 #   scheduler  crawls and maintains; never serves a request
+#   caddy      TLS termination and the only public entry point
 #
-# Keeping them apart means a long crawl cannot make the site slow, and
-# restarting the site cannot interrupt a crawl.
+# Keeping web and scheduler apart means a long crawl cannot make the
+# site slow, and restarting the site cannot interrupt a crawl.
 #
-#   docker compose up -d
+#   docker compose up -d --build
 #   docker compose run --rm web alembic upgrade head
 #   docker compose logs -f scheduler
+#
+# See docs/ORACLE.md for a full walkthrough on a free Oracle Cloud
+# machine, including the firewall rules Oracle applies by default.
 
 services:
   postgres:
@@ -45,8 +49,29 @@ services:
       LOG_LEVEL: INFO
     volumes:
       - archive:/app/data
+    # Not published to the host. Caddy is the only way in, so the app is
+    # never reachable over plain HTTP by its port number.
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      # A hostname for a certificate, e.g. 203.0.113.10.nip.io or your
+      # own domain. Use ":80" to serve plain HTTP without one.
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env}
+      ACME_EMAIL: ${CONTACT_EMAIL:?set CONTACT_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # certificates; losing this means re-issuing
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
     ports:
-      - "8000:8000"
+      - "80:80"
+      - "443:443"
 
   scheduler:
     build: .
@@ -68,3 +93,6 @@ services:
 volumes:
   pgdata:
   archive:
+  caddy_data:
+  caddy_config:
+  caddy_logs:

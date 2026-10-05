@@ -1,0 +1,44 @@
+# Reverse proxy with automatic HTTPS.
+#
+# SITE_ADDRESS decides what Caddy serves and whether it gets a
+# certificate:
+#
+#   203.0.113.10.nip.io   a real hostname that resolves to that IP, so
+#                         Let's Encrypt will issue for it. Free HTTPS
+#                         without buying a domain - useful for a first
+#                         deployment.
+#   auctions.example.in   your own domain, once you have one.
+#   :80                   plain HTTP, no certificate. Only for testing.
+#
+# Caddy obtains and renews the certificate itself; there is nothing to
+# configure and nothing to remember to renew.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# The portal never serves user-supplied HTML, so a strict policy
+	# costs nothing and closes off a class of mistakes later.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy web:8000 {
+		health_uri /api/health
+		health_interval 30s
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MB
+			roll_keep 5
+		}
+	}
+}
