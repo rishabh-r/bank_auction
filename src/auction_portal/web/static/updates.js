@@ -52,6 +52,55 @@
     return plural(Math.round(seconds / 86400), "day") + " ago";
   }
 
+  /* Keep auction countdowns current without reloading the page or data. */
+  function countdown(date) {
+    var delta = date - new Date();
+    var future = delta > 0;
+    var seconds = Math.abs(delta) / 1000;
+    if (seconds < 60) return future ? "in under a minute" : "just passed";
+
+    var amount, unit;
+    if (seconds < 3600) {
+      amount = future ? Math.ceil(seconds / 60) : Math.floor(seconds / 60);
+      unit = "minute";
+    } else if (seconds < 86400) {
+      amount = future ? Math.ceil(seconds / 3600) : Math.floor(seconds / 3600);
+      unit = "hour";
+    } else {
+      amount = future ? Math.ceil(seconds / 86400) : Math.floor(seconds / 86400);
+      unit = "day";
+    }
+    amount = Math.max(amount, 1);
+    return future ? "in " + plural(amount, unit) : plural(amount, unit) + " ago";
+  }
+
+  function drawCountdowns() {
+    document.querySelectorAll("[data-countdown]").forEach(function (element) {
+      var date = new Date(element.dataset.countdown);
+      if (!Number.isNaN(date.getTime())) element.textContent = countdown(date);
+    });
+  }
+
+  /* Recompute date-driven status badges using the same rules as the server. */
+  function drawClockStatuses() {
+    document.querySelectorAll("[data-clock-status]").forEach(function (element) {
+      var current = element.dataset.clockStatus;
+      if (["upcoming", "live", "closed"].indexOf(current) === -1) return;
+
+      var start = new Date(element.dataset.auctionStart);
+      if (Number.isNaN(start.getTime())) return;
+
+      var now = new Date();
+      var end = element.dataset.auctionEnd
+        ? new Date(element.dataset.auctionEnd)
+        : new Date(start.getTime() + 86400000);
+      if (Number.isNaN(end.getTime())) end = new Date(start.getTime() + 86400000);
+      var status = now < start ? "upcoming" : now < end ? "live" : "closed";
+      element.className = "status status-" + status;
+      element.textContent = status;
+    });
+  }
+
   /* --- the quiet line ---------------------------------------------- */
 
   function drawHeartbeat(state) {
@@ -146,7 +195,13 @@
   });
 
   drawHeartbeat("idle");
-  setInterval(function () { drawHeartbeat("idle"); }, TICK_MS);
+  drawCountdowns();
+  drawClockStatuses();
+  setInterval(function () {
+    drawHeartbeat("idle");
+    drawCountdowns();
+    drawClockStatuses();
+  }, TICK_MS);
   timer = setInterval(poll, POLL_MS);
   // First check shortly after load, so the line is doing something
   // visible rather than sitting still for a whole minute.

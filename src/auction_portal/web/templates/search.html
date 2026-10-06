@@ -113,7 +113,12 @@
         <a class="card-link" href="/listing/{{ listing.id }}">
           <div class="card-head">
             <h2>{{ listing.title or 'Property' }}</h2>
-            <span class="status status-{{ listing.effective_status }}">{{ listing.effective_status }}</span>
+            <span class="status status-{{ listing.effective_status }}"
+                  data-clock-status="{{ listing.effective_status }}"
+                  data-auction-start="{{ listing.auction_start_at.isoformat() if listing.auction_start_at else '' }}"
+                  data-auction-end="{{ listing.auction_end_at.isoformat() if listing.auction_end_at else '' }}">
+              {{ listing.effective_status }}
+            </span>
           </div>
 
           <p class="where">
@@ -146,7 +151,9 @@
               <span class="tag tag-alert">{{ listing.legal_basis | upper }}</span>
             {% endif %}
             {% if listing.auction_start_at %}
-              <span class="tag tag-when">{{ listing.auction_start_at | human }}</span>
+              <span class="tag tag-when" data-countdown="{{ listing.auction_start_at.isoformat() }}">
+                {{ listing.auction_start_at | human }}
+              </span>
             {% endif %}
           </div>
         </a>

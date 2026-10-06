@@ -117,6 +117,11 @@ misleading and should be fixed before re-enabling schedules.
   counts as context, not a live count.
 - Search filters, listing confidence/withholding, status lifecycle, revision
   history and duplicate/re-auction reporting are implemented.
+- Auction countdown text and date-derived `upcoming` / `live` / `closed`
+  badges redraw in the browser every 15 seconds without reloading the page.
+  Actual listing data still uses the existing 60-second version check and
+  explicit Refresh / Not now notice; crawls update the database, not an
+  already-rendered page automatically.
 - The portal avoids storing borrower/guarantor names and links listings back
   to their source notice. It includes disclaimers and possession/legal-process
   warnings.
