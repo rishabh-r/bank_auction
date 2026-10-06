@@ -87,6 +87,33 @@ class Settings(BaseSettings):
     # would otherwise reject it.
     postgres_password: SecretStr | None = None
 
+    # Written into .env by `neon link` and `neon env pull`. We do not use
+    # them, but extra="forbid" would reject the file outright, so the app
+    # would refuse to start every time anyone ran a Neon command.
+    #
+    # The unpooled URL connects straight to the compute rather than
+    # through the pooler. Keep it: migrations and anything needing
+    # session-level state should use it, not the pooled endpoint.
+    database_url_unpooled: SecretStr | None = None
+    neon_branch: str | None = None
+
+    @field_validator("database_url", "test_database_url", "database_url_unpooled", mode="before")
+    @classmethod
+    def _use_psycopg_driver(cls, value: object) -> object:
+        """Accept the plain `postgresql://` scheme that hosts hand out.
+
+        Neon, Render and most providers give a URL starting
+        `postgresql://`, which SQLAlchemy reads as "use psycopg2" - a
+        driver we do not install. Rewriting it here means a connection
+        string can be pasted in exactly as the provider gives it,
+        instead of failing with an unhelpful import error.
+        """
+        if isinstance(value, SecretStr):
+            value = value.get_secret_value()
+        if isinstance(value, str) and value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg://", 1)
+        return value
+
     # --- API keys ---------------------------------------------------------
     # SecretStr keeps the value out of logs, tracebacks and repr() output.
     # Read it deliberately with .get_secret_value(); it cannot leak by accident.
