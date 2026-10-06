@@ -30,6 +30,18 @@ class Settings(BaseSettings):
     # repository because it is large and always re-fetchable.
     data_dir: Path = PROJECT_ROOT / "data"
 
+    # Whether to keep the raw documents at all.
+    #
+    # Turn this off where there is no durable filesystem - a GitHub
+    # Actions runner, for instance, is destroyed after each job. Writing
+    # an archive there would look like it worked and quietly produce
+    # database rows pointing at files that no longer exist.
+    #
+    # The cost of turning it off is `reparse`: improving a parser then
+    # means re-crawling the source rather than re-reading what we
+    # already hold.
+    archive_enabled: bool = True
+
     # --- Crawler identity -------------------------------------------------
     # We identify ourselves honestly on every request. A crawler that can be
     # contacted usually gets left alone; an anonymous one gets blocked.

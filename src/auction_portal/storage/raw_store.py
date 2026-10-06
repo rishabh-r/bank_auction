@@ -24,12 +24,37 @@ from auction_portal.fetching.models import RawDocument
 log = logging.getLogger(__name__)
 
 
-class RawStore:
-    """Content-addressed store for raw documents."""
+class ArchiveDisabledError(RuntimeError):
+    """Raised when something tries to read an archive that was never kept."""
 
-    def __init__(self, settings: Settings | None = None, root: Path | None = None):
-        self._root = root or (settings or get_settings()).raw_dir
-        self._root.mkdir(parents=True, exist_ok=True)
+
+class RawStore:
+    """Content-addressed store for raw documents.
+
+    Can be disabled, for hosts with no durable filesystem. When
+    disabled, `save` returns the key the document *would* have had and
+    writes nothing, so the rest of the pipeline is unchanged and the
+    database still records where the data came from - it simply cannot
+    be re-read later.
+    """
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        root: Path | None = None,
+        enabled: bool | None = None,
+    ):
+        settings = settings or get_settings()
+        self._enabled = settings.archive_enabled if enabled is None else enabled
+        self._root = root or settings.raw_dir
+        if self._enabled:
+            self._root.mkdir(parents=True, exist_ok=True)
+        else:
+            log.info("raw archive disabled - documents will not be kept")
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
 
     def storage_key(self, document: RawDocument) -> str:
         """Stable path for a document, e.g. 'ibbi/2026/09/26/a3f5...pdf'.
@@ -57,6 +82,9 @@ class RawStore:
         into place, so a crash mid-write cannot leave a truncated archive.
         """
         key = self.storage_key(document)
+        if not self._enabled:
+            return key
+
         path = self._path_for(key)
 
         if path.exists():
@@ -74,6 +102,12 @@ class RawStore:
         return key
 
     def read(self, key: str) -> bytes:
+        if not self._enabled:
+            raise ArchiveDisabledError(
+                "The raw archive is disabled, so stored documents cannot be "
+                "read back. Set ARCHIVE_ENABLED=true on a host with a durable "
+                "filesystem to use reparse."
+            )
         return self._path_for(key).read_bytes()
 
     def metadata(self, key: str) -> dict:

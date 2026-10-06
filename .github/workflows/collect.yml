@@ -1,0 +1,87 @@
+# Collects auction listings on a schedule.
+#
+# This is the collector. On a server it would be a long-running
+# scheduler process; here each run is a fresh machine that crawls a
+# batch, writes to the hosted database, and exits. The website on Vercel
+# reads from that same database, so nothing depends on anyone's laptop.
+#
+# Two consequences of running here rather than on a server:
+#
+#   - There is no durable filesystem, so ARCHIVE_ENABLED is false. The
+#     listings are kept; the raw documents are not. Improving a parser
+#     therefore means re-crawling rather than reparsing.
+#
+#   - Minutes are limited on private repositories (2,000 a month on a
+#     free account). The batch size below is set so four runs a day stay
+#     comfortably inside that. Public repositories have no limit.
+#
+# GitHub disables scheduled workflows after 60 days without repository
+# activity, and will email you first. Push anything to re-enable.
+
+name: Collect listings
+
+on:
+  schedule:
+    # Times are UTC. These are 07:40, 13:40, 19:40 and 01:40 IST.
+    # Deliberately not on the hour: GitHub's scheduler is busiest then
+    # and delays runs.
+    - cron: "10 2,8,14,20 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "URLs to crawl this run"
+        required: false
+        default: "250"
+
+concurrency:
+  # Never let two crawls overlap: it would double our request rate
+  # against the source.
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+      CONTACT_URL: ${{ secrets.CONTACT_URL }}
+      ENVIRONMENT: production
+      ARCHIVE_ENABLED: "false"
+      DB_SERVERLESS: "true"
+      CRAWLER_DELAY_SECONDS: "3.0"
+      LOG_LEVEL: INFO
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Apply any pending migrations
+        run: alembic upgrade head
+
+      - name: Crawl properties
+        run: |
+          python -m auction_portal crawl baanknet \
+            --limit ${{ github.event.inputs.limit || 250 }}
+
+      - name: Advance statuses and apply retention
+        # Runs even if the crawl failed: auctions still finish, and a
+        # site showing concluded auctions as upcoming is worse than one
+        # that is missing a few new listings.
+        if: always()
+        run: python -m auction_portal maintain
+
+      - name: Report health
+        if: always()
+        run: python -m auction_portal health || true

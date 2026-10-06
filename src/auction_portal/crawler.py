@@ -20,6 +20,7 @@ from auction_portal.db.repository import DocumentRepository
 from auction_portal.db.session import get_sessionmaker
 from auction_portal.fetching.models import FetchOutcome, RawDocument
 from auction_portal.sources.base import SourceAdapter
+from auction_portal.storage.raw_store import ArchiveDisabledError
 
 log = logging.getLogger(__name__)
 
@@ -198,6 +199,13 @@ class Crawler:
         """
         report = CrawlReport(source_id=self._adapter.source_id)
         store = self._archiver.store
+
+        if not store.enabled:
+            raise ArchiveDisabledError(
+                "Nothing to reparse: the raw archive is disabled on this host, "
+                "so no documents were kept. Improving a parser here means "
+                "re-crawling the source."
+            )
 
         with self._sessions() as session:
             documents = DocumentRepository(session).documents_for_source(
