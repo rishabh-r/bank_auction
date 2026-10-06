@@ -36,9 +36,11 @@ GitHub Actions (scheduled collection and maintenance)
   permanently running process.
 - **Database:** Neon project `rapid-union-54468753`, production branch. The
   project was linked/configured from this checkout; `neon.ts` is deliberately
-  `defineConfig({})`. Neon CLI setup/deploy was run. The app's local ignored
-  `.env` has the connection settings. Never copy a connection string or
-  password into README, source control, logs, or chat.
+  `defineConfig({})`. Neon CLI setup/deploy was run. A live read-only check on
+  6 October 2026 confirmed PostgreSQL 18.6, Alembic revision `0035c50fc4a9`,
+  and 3,367 listing rows (3,342 `baanknet`, 25 `baanknet_vehicle`). The app's
+  local ignored `.env` has the connection settings. Never copy a connection
+  string or password into README, source control, logs, or chat.
 - **Website:** Vercel deployment is **not yet connected or live from this
   checkout**. `vercel.json` and `api/index.py` are present for the Python
   serverless entry point. `docs/VERCEL.md` was written before the Actions
@@ -100,17 +102,14 @@ is enabled for the short-lived runner and Vercel runtime.
 1. Add GitHub repository Actions secrets: `DATABASE_URL` (Neon pooled URL),
    `CONTACT_EMAIL`, and `CONTACT_URL`. Do this in GitHub Settings; do not add
    them to a workflow file or README.
-2. Confirm Neon schema is at the latest Alembic revision and that the intended
-   listings are present. If importing local data, inspect and use
-   `scripts/copy_to_remote.py` carefully; avoid copying test/local-only data.
-3. Connect the GitHub repo to Vercel. Configure Vercel environment variables:
+2. Connect the GitHub repo to Vercel. Configure Vercel environment variables:
    `DATABASE_URL` (pooled Neon URL), `CONTACT_EMAIL`, `CONTACT_URL`,
    `DB_SERVERLESS=true`, `ENVIRONMENT=production`. Deploy and smoke-check the
    public site.
-4. Enable Actions schedules, manually run each workflow once, and inspect
-   logs, Neon writes, listing dates/statuses and health output. No live cloud
-   crawl or Vercel deploy is confirmed by this README.
-5. Before public launch, complete a qualified Indian legal/privacy review,
+3. Enable the Actions schedules, manually run each workflow once, and inspect
+   logs, Neon writes, listing dates/statuses and health output. No cloud crawl
+   or Vercel deploy is confirmed by this README.
+4. Before public launch, complete a qualified Indian legal/privacy review,
    publish a real contact/about page, privacy notice and takedown route, and
    confirm source terms and robots policies.
 
