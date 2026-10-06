@@ -30,33 +30,44 @@ GitHub Actions (scheduled collection and maintenance)
             Vercel portal
 ```
 
-- **Collector:** `.github/workflows/collect.yml` runs four times daily at
-  07:40, 13:40, 19:40 and 01:40 India time (GitHub cron is UTC). The vehicle
-  workflow runs daily at 04:10 India time. These are scheduled jobs, not a
-  permanently running process.
+- **Collector:** `.github/workflows/collect.yml` is scheduled four times
+  daily at 07:40, 13:40, 19:40 and 01:40 India time (GitHub cron is UTC).
+  The vehicle workflow is scheduled daily at 04:10 India time. On 6 October,
+  GitHub-hosted requests to BAANKNET returned HTTP 403 for `robots.txt` and
+  both property sitemaps. That run misleadingly showed green while discovering
+  and fetching zero URLs because discovery errors are logged and swallowed.
+  Do not treat that workflow as a functioning collector or run the vehicle
+  workflow against the same blocked host. Pause/disable both scheduled
+  workflows until BAANKNET approves cloud access or an official feed is
+  arranged; confirm their current enabled/disabled state in GitHub.
 - **Database:** Neon project `rapid-union-54468753`, production branch. The
   project was linked/configured from this checkout; `neon.ts` is deliberately
   `defineConfig({})`. Neon CLI setup/deploy was run. A live read-only check on
   6 October 2026 confirmed PostgreSQL 18.6, Alembic revision `0035c50fc4a9`,
-  and 3,367 listing rows (3,342 `baanknet`, 25 `baanknet_vehicle`). The app's
-  local ignored `.env` has the connection settings. Never copy a connection
-  string or password into README, source control, logs, or chat.
-- **Website:** Vercel deployment is **not yet connected or live from this
-  checkout**. `vercel.json` and `api/index.py` are present for the Python
-  serverless entry point. `docs/VERCEL.md` was written before the Actions
-  collector was added; its environment-variable and smoke-check steps remain
-  useful, but its laptop/VPS collector instructions are superseded here.
+  3,534 total listing rows (3,523 published), 261 archived source documents,
+  and 258 URL-state rows. The property table's sequence had fallen behind
+  imported IDs; `listings`, `listing_revisions`, and `source_documents`
+  sequences were aligned to their row maxima before the successful local run.
+  The app's local ignored `.env` has the Neon connection settings. Never copy
+  a connection string or password into README, source control, logs, or chat.
+- **Website:** live at
+  [bank-auction-seven.vercel.app](https://bank-auction-seven.vercel.app/).
+  `/api/health` returned `status: ok` and 3,523 published listings after the
+  local crawl. Vercel environment variables are configured. `CONTACT_URL` is
+  `https://bank-auction-seven.vercel.app/bot`. `docs/VERCEL.md` was written
+  before the Actions collector was added; its laptop/VPS collector instructions
+  are superseded here.
 - **GitHub:** intended public repository is
   [`rishabh-r/bank_auction`](https://github.com/rishabh-r/bank_auction), as
-  provided by the user. The `main` branch is now pushed and tracks
-  `origin/main`. The current checkout was scanned for common credential
-  patterns across reachable Git history before the public push. GitHub Actions
-  secrets and Vercel deployment are still not configured/verified.
-- **Laptop independence:** once GitHub Actions has the required repository
-  secrets and Vercel is connected, collection/site hosting do not depend on
-  the laptop. The GitHub scheduled workflows still require enabling and
-  maintaining the repository; scheduled workflows may be disabled by GitHub
-  after prolonged repository inactivity.
+  provided by the user. The `main` branch is pushed and tracks `origin/main`.
+  GitHub Actions secrets are configured (the manual workflow ran with them).
+  Before the public push, reachable Git history was scanned for common
+  credential patterns.
+- **Laptop independence:** the website and database do not depend on the
+  laptop. The current successful collector path does depend on the laptop's
+  network because GitHub-hosted runners receive 403 from BAANKNET. The user
+  wants unattended crawling, so obtain an approved cloud-access method before
+  claiming automated updates are live.
 
 ### Collector behavior and an accepted tradeoff
 
@@ -73,8 +84,25 @@ The property workflow runs `alembic upgrade head`, crawls BAANKNET with a
 default limit of 250 URLs, then runs maintenance and a best-effort health
 report. It accepts a `limit` input for manual workflow runs. Vehicle collection
 is a separate daily workflow with a limit of 150. Both use the GitHub Actions
-secret `DATABASE_URL`, plus `CONTACT_EMAIL` and `CONTACT_URL`. `DB_SERVERLESS`
-is enabled for the short-lived runner and Vercel runtime.
+secrets `DATABASE_URL`, `CONTACT_EMAIL`, and `CONTACT_URL`. `DB_SERVERLESS` is
+enabled for the short-lived runner and Vercel runtime. However, GitHub-hosted
+requests to BAANKNET were refused (403), so scheduled cloud runs currently do
+not update listings; the workflow's green result for zero discovered URLs is
+misleading and should be fixed before re-enabling schedules.
+
+### Latest manual crawl (6 October 2026)
+
+- A manual local crawl reached BAANKNET from the laptop, read both sitemaps
+  (71,907 property URLs), and processed a 250-URL batch with the configured
+  3-second request delay and robots checks enabled.
+- The first attempt exposed out-of-sync Neon sequences. It fetched 11 pages
+  but listing writes failed; the 11 local raw pages were recovered by
+  `auction_portal reparse baanknet` after aligning the three table sequences.
+- The subsequent batch completed: 250 fetched, 156 new listings, 8 updated,
+  85 unchanged, and 1 parse failure. Neon then showed 3,534 total rows and
+  3,523 published. Raw pages are stored on this laptop under ignored `data/`.
+- The local ignored `.env` now points the crawler's `CONTACT_URL` to the live
+  `/bot` page. Do not commit `.env` or the local raw archive.
 
 ### What has been implemented
 
@@ -99,16 +127,15 @@ is enabled for the short-lived runner and Vercel runtime.
 
 ### What is still pending
 
-1. Add GitHub repository Actions secrets: `DATABASE_URL` (Neon pooled URL),
-   `CONTACT_EMAIL`, and `CONTACT_URL`. Do this in GitHub Settings; do not add
-   them to a workflow file or README.
-2. Connect the GitHub repo to Vercel. Configure Vercel environment variables:
-   `DATABASE_URL` (pooled Neon URL), `CONTACT_EMAIL`, `CONTACT_URL`,
-   `DB_SERVERLESS=true`, `ENVIRONMENT=production`. Deploy and smoke-check the
-   public site.
-3. Enable the Actions schedules, manually run each workflow once, and inspect
-   logs, Neon writes, listing dates/statuses and health output. No cloud crawl
-   or Vercel deploy is confirmed by this README.
+1. Confirm both GitHub Actions workflows are disabled while cloud BAANKNET
+   access returns 403. Do not evade the block with proxies, IP rotation, or
+   browser impersonation.
+2. Ask BAANKNET/PSB Alliance for approved machine access, an official feed/API,
+   or written guidance on cloud collection. Their support details are on
+   [`PSB Alliance's BAANKNET page`](https://psballiance.com/baanknet.html).
+3. Make sitemap discovery failures fail the workflow instead of returning a
+   green zero-result run. Only resume cloud schedules after permitted access
+   is confirmed and an end-to-end cloud crawl persists records in Neon.
 4. Before public launch, complete a qualified Indian legal/privacy review,
    publish a real contact/about page, privacy notice and takedown route, and
    confirm source terms and robots policies.
@@ -121,10 +148,9 @@ is enabled for the short-lived runner and Vercel runtime.
 - A user-provided OpenAI API key appeared earlier in the conversation. It is
   not needed for Phase 1. Do not repeat, log, or commit it; if it is still
   active, advise the user to revoke/rotate it before any later Phase 2 use.
-- The Neon connection URL is in local ignored configuration. GitHub Actions
-  and Vercel secrets still need to be configured. If database credentials were
-  exposed, rotate them in Neon before deployment. Never display the full
-  connection URL in command output.
+- The Neon connection URL is in local ignored configuration and provider
+  secret settings. If database credentials were exposed, rotate them in Neon.
+  Never display the full connection URL in command output.
 - Before any public push: `git status --short`, inspect `git diff --cached`,
   inspect tracked files for secrets, and confirm ignored local files are not
   staged. Public repository means any accidentally committed secret should be
@@ -139,8 +165,10 @@ is enabled for the short-lived runner and Vercel runtime.
    means a deployment is live.
 3. Confirm repository authentication and current cloud configuration without
    printing secret values.
-4. Continue the pending GitHub → Actions secrets → Vercel connection → smoke
-   check sequence above. Keep the laptop out of the production schedule.
+4. Continue from the latest crawl note above. The site is live; GitHub-hosted
+   BAANKNET access is blocked and the user's local network currently works.
+   Never claim cloud automation is active until the 403 is resolved with an
+   approved method and the workflow logs confirm saved rows.
 
 ---
 
@@ -156,10 +184,10 @@ Background research, the regulatory framework and the full build plan are in
 
 ## Status
 
-**Phase 1 implementation complete; cloud launch pending.** The portal
-collects listings from two BAANKNET feeds, has maintenance/health tooling,
-and includes deployment configuration. The Vercel deployment, GitHub Actions
-secrets and first cloud runs still need to be completed and verified.
+**Phase 1 implementation complete; portal live.** Vercel serves the site from
+Neon, and a manual laptop crawl succeeded. GitHub-hosted BAANKNET collection
+currently receives HTTP 403, so automated cloud listing updates are not
+working. See the current-state handoff at the top of this README.
 
 | # | Milestone | State |
 |---|-----------|-------|
