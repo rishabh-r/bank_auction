@@ -46,10 +46,10 @@ GitHub Actions (scheduled collection and maintenance)
   useful, but its laptop/VPS collector instructions are superseded here.
 - **GitHub:** intended public repository is
   [`rishabh-r/bank_auction`](https://github.com/rishabh-r/bank_auction), as
-  provided by the user. At the time this handoff was written, this checkout
-  had no Git remote configured and there was no push/deployment confirmation.
-  The user explicitly authorized pushing to that public repository. Before
-  pushing, inspect the staged/tracked files and ensure secrets are absent.
+  provided by the user. The `main` branch is now pushed and tracks
+  `origin/main`. The current checkout was scanned for common credential
+  patterns across reachable Git history before the public push. GitHub Actions
+  secrets and Vercel deployment are still not configured/verified.
 - **Laptop independence:** once GitHub Actions has the required repository
   secrets and Vercel is connected, collection/site hosting do not depend on
   the laptop. The GitHub scheduled workflows still require enabling and
@@ -97,22 +97,20 @@ is enabled for the short-lived runner and Vercel runtime.
 
 ### What is still pending
 
-1. Set up the GitHub repository connection and push the intended branch after
-   reviewing the exact commit contents for credentials and local data.
-2. Add GitHub repository Actions secrets: `DATABASE_URL` (Neon pooled URL),
+1. Add GitHub repository Actions secrets: `DATABASE_URL` (Neon pooled URL),
    `CONTACT_EMAIL`, and `CONTACT_URL`. Do this in GitHub Settings; do not add
    them to a workflow file or README.
-3. Confirm Neon schema is at the latest Alembic revision and that the intended
+2. Confirm Neon schema is at the latest Alembic revision and that the intended
    listings are present. If importing local data, inspect and use
    `scripts/copy_to_remote.py` carefully; avoid copying test/local-only data.
-4. Connect the GitHub repo to Vercel. Configure Vercel environment variables:
+3. Connect the GitHub repo to Vercel. Configure Vercel environment variables:
    `DATABASE_URL` (pooled Neon URL), `CONTACT_EMAIL`, `CONTACT_URL`,
    `DB_SERVERLESS=true`, `ENVIRONMENT=production`. Deploy and smoke-check the
    public site.
-5. Enable Actions schedules, manually run each workflow once, and inspect
+4. Enable Actions schedules, manually run each workflow once, and inspect
    logs, Neon writes, listing dates/statuses and health output. No live cloud
    crawl or Vercel deploy is confirmed by this README.
-6. Before public launch, complete a qualified Indian legal/privacy review,
+5. Before public launch, complete a qualified Indian legal/privacy review,
    publish a real contact/about page, privacy notice and takedown route, and
    confirm source terms and robots policies.
 
@@ -138,8 +136,8 @@ is enabled for the short-lived runner and Vercel runtime.
 1. Read this handoff. Use [`docs/VERCEL.md`](docs/VERCEL.md) for the Vercel
    configuration checklist, bearing in mind its collector section is older.
 2. Inspect `git status --short --branch`, `git remote -v`, and the latest
-   commits. Do not assume that a previous setup step means a deployment is
-   live.
+   commits. `main` tracks `origin/main`; do not assume that a successful push
+   means a deployment is live.
 3. Confirm repository authentication and current cloud configuration without
    printing secret values.
 4. Continue the pending GitHub → Actions secrets → Vercel connection → smoke
