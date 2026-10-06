@@ -1,5 +1,152 @@
 # Auction Portal
 
+> **Project handoff — 6 October 2026**
+> Read this section first when continuing the project. This README is the
+> durable context for the current implementation and deployment plan.
+
+## Current state and handoff
+
+### What the project is
+
+An Indian bank-auction discovery portal. It fetches publicly accessible
+BAANKNET property and repossessed-vehicle listings, stores normalized records
+in PostgreSQL, and serves search pages plus a JSON API. It is an information
+directory: users complete due diligence and participate in the auction on the
+originating bank/auction platform. The portal does not sell assets or accept
+EMD/payments.
+
+### Current intended hosting arrangement
+
+The user wants the portal and crawlers to keep running while their laptop is
+off. The current design is:
+
+```text
+GitHub Actions (scheduled collection and maintenance)
+                 │ writes
+                 ▼
+          Neon PostgreSQL
+                 ▲ reads
+                 │
+            Vercel portal
+```
+
+- **Collector:** `.github/workflows/collect.yml` runs four times daily at
+  07:40, 13:40, 19:40 and 01:40 India time (GitHub cron is UTC). The vehicle
+  workflow runs daily at 04:10 India time. These are scheduled jobs, not a
+  permanently running process.
+- **Database:** Neon project `rapid-union-54468753`, production branch. The
+  project was linked/configured from this checkout; `neon.ts` is deliberately
+  `defineConfig({})`. Neon CLI setup/deploy was run. The app's local ignored
+  `.env` has the connection settings. Never copy a connection string or
+  password into README, source control, logs, or chat.
+- **Website:** Vercel deployment is **not yet connected or live from this
+  checkout**. `vercel.json` and `api/index.py` are present for the Python
+  serverless entry point. `docs/VERCEL.md` was written before the Actions
+  collector was added; its environment-variable and smoke-check steps remain
+  useful, but its laptop/VPS collector instructions are superseded here.
+- **GitHub:** intended public repository is
+  [`rishabh-r/bank_auction`](https://github.com/rishabh-r/bank_auction), as
+  provided by the user. At the time this handoff was written, this checkout
+  had no Git remote configured and there was no push/deployment confirmation.
+  The user explicitly authorized pushing to that public repository. Before
+  pushing, inspect the staged/tracked files and ensure secrets are absent.
+- **Laptop independence:** once GitHub Actions has the required repository
+  secrets and Vercel is connected, collection/site hosting do not depend on
+  the laptop. The GitHub scheduled workflows still require enabling and
+  maintaining the repository; scheduled workflows may be disabled by GitHub
+  after prolonged repository inactivity.
+
+### Collector behavior and an accepted tradeoff
+
+GitHub-hosted runners are temporary, so both collector workflows set
+`ARCHIVE_ENABLED=false`. Structured listings are persisted in Neon; raw fetched
+HTML/documents are not kept in durable storage. Consequently parser changes
+require fetching the source again; local development can still archive files
+under ignored `data/` and use `reparse`. This tradeoff was discussed and
+accepted for the initial cloud test to avoid adding object storage. Preserve
+that distinction when explaining the system. The collector uses a 3-second
+request delay and obeys the source adapter's robots policy.
+
+The property workflow runs `alembic upgrade head`, crawls BAANKNET with a
+default limit of 250 URLs, then runs maintenance and a best-effort health
+report. It accepts a `limit` input for manual workflow runs. Vehicle collection
+is a separate daily workflow with a limit of 150. Both use the GitHub Actions
+secret `DATABASE_URL`, plus `CONTACT_EMAIL` and `CONTACT_URL`. `DB_SERVERLESS`
+is enabled for the short-lived runner and Vercel runtime.
+
+### What has been implemented
+
+- Phase 1 milestones M1–M6 are implemented in the codebase: project foundation
+  and config; polite fetching and archival; PostgreSQL schema/migrations;
+  BAANKNET property and vehicle adapters; searchable server-rendered portal
+  and JSON API; scheduling, maintenance, health reporting, packaging and user
+  manual.
+- Collectors for BAANKNET property listings (roughly 72,000 site-reported
+  records across public-sector banks/IBBI) and repossessed vehicles (roughly
+  400 site-reported records) are included. Treat those approximate source
+  counts as context, not a live count.
+- Search filters, listing confidence/withholding, status lifecycle, revision
+  history and duplicate/re-auction reporting are implemented.
+- The portal avoids storing borrower/guarantor names and links listings back
+  to their source notice. It includes disclaimers and possession/legal-process
+  warnings.
+- Tests and source fixtures exist under `tests/`; docs include the research,
+  deployment guides and customer user manual.
+- Neon configuration support, a copy-to-remote utility, Vercel entry point,
+  and GitHub scheduled workflows are in the repository.
+
+### What is still pending
+
+1. Set up the GitHub repository connection and push the intended branch after
+   reviewing the exact commit contents for credentials and local data.
+2. Add GitHub repository Actions secrets: `DATABASE_URL` (Neon pooled URL),
+   `CONTACT_EMAIL`, and `CONTACT_URL`. Do this in GitHub Settings; do not add
+   them to a workflow file or README.
+3. Confirm Neon schema is at the latest Alembic revision and that the intended
+   listings are present. If importing local data, inspect and use
+   `scripts/copy_to_remote.py` carefully; avoid copying test/local-only data.
+4. Connect the GitHub repo to Vercel. Configure Vercel environment variables:
+   `DATABASE_URL` (pooled Neon URL), `CONTACT_EMAIL`, `CONTACT_URL`,
+   `DB_SERVERLESS=true`, `ENVIRONMENT=production`. Deploy and smoke-check the
+   public site.
+5. Enable Actions schedules, manually run each workflow once, and inspect
+   logs, Neon writes, listing dates/statuses and health output. No live cloud
+   crawl or Vercel deploy is confirmed by this README.
+6. Before public launch, complete a qualified Indian legal/privacy review,
+   publish a real contact/about page, privacy notice and takedown route, and
+   confirm source terms and robots policies.
+
+### Credentials and safety for the next agent
+
+- `.env`, `.neon`, `data/`, `.pgsql/`, and logs are local/secret/runtime
+  material and must never be committed. `.env.example` contains placeholders
+  and local development defaults only.
+- A user-provided OpenAI API key appeared earlier in the conversation. It is
+  not needed for Phase 1. Do not repeat, log, or commit it; if it is still
+  active, advise the user to revoke/rotate it before any later Phase 2 use.
+- The Neon connection URL is in local ignored configuration. GitHub Actions
+  and Vercel secrets still need to be configured. If database credentials were
+  exposed, rotate them in Neon before deployment. Never display the full
+  connection URL in command output.
+- Before any public push: `git status --short`, inspect `git diff --cached`,
+  inspect tracked files for secrets, and confirm ignored local files are not
+  staged. Public repository means any accidentally committed secret should be
+  treated as compromised and rotated, not merely deleted in a later commit.
+
+### Useful next-agent starting point
+
+1. Read this handoff. Use [`docs/VERCEL.md`](docs/VERCEL.md) for the Vercel
+   configuration checklist, bearing in mind its collector section is older.
+2. Inspect `git status --short --branch`, `git remote -v`, and the latest
+   commits. Do not assume that a previous setup step means a deployment is
+   live.
+3. Confirm repository authentication and current cloud configuration without
+   printing secret values.
+4. Continue the pending GitHub → Actions secrets → Vercel connection → smoke
+   check sequence above. Keep the laptop out of the production schedule.
+
+---
+
 A centralised search portal for Indian bank auction listings — properties and
 other assets sold by banks under the SARFAESI Act, 2002, aggregated from
 publicly available sources into one searchable place.
@@ -12,9 +159,10 @@ Background research, the regulatory framework and the full build plan are in
 
 ## Status
 
-**Phase 1 complete.** The portal collects listings from two sources,
-maintains itself on a schedule, monitors its own health, and is packaged
-for deployment.
+**Phase 1 implementation complete; cloud launch pending.** The portal
+collects listings from two BAANKNET feeds, has maintenance/health tooling,
+and includes deployment configuration. The Vercel deployment, GitHub Actions
+secrets and first cloud runs still need to be completed and verified.
 
 | # | Milestone | State |
 |---|-----------|-------|
@@ -25,8 +173,10 @@ for deployment.
 | 5 | Search UI | **done** |
 | 6 | Scheduling, second source, monitoring, packaging | **done** |
 
-Deployment itself needs your hosting account and a legal review — see
-[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+For the current Vercel + Neon + GitHub Actions plan, see the handoff above and
+[`docs/VERCEL.md`](docs/VERCEL.md). The older VPS/container guidance in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) is background, not the current
+hosting choice. A legal review is still required before public launch.
 
 **Phase 2** is PDF and OCR extraction, which unlocks the private banks
 (ICICI, HDFC, Axis). It is roughly as much work as everything above.
@@ -149,8 +299,10 @@ after a reboot.
 ```
 
 Fetching the same URL twice reports `304` or `UNCHANGED` and stores nothing
-new. That is the intended behaviour, and it is what keeps later parsing and
-OCR costs down.
+new. On a durable local filesystem the raw-document archive enables offline
+reparsing. In GitHub Actions, archiving is deliberately disabled because the
+runner is temporary; production parsing improvements therefore require a
+source re-fetch unless durable object storage is added.
 
 `reparse` is the reason raw bytes are archived immutably: when the parser
 improves, history is reprocessed offline instead of re-crawled. No source
@@ -340,9 +492,10 @@ the same change in the same order.
 
 These are deliberate and apply to every change:
 
-1. **Raw downloaded data is never modified or deleted.** Parsers are rewritten
-   often; re-downloading is not an option. Everything fetched is archived
-   immutably and every later stage re-runs from that archive.
+1. **When archiving is enabled, raw downloaded data is immutable.** Local
+   development archives documents for offline reparsing. The current GitHub
+   Actions collectors disable raw archiving because their filesystems are
+   temporary; see the handoff above for the accepted consequence.
 2. **No secrets in the repository.** All configuration comes from `.env`,
    which is git-ignored. `.env.example` documents the required keys.
 3. **Dependencies are pinned exactly.** Upgrades are a reviewed change to
