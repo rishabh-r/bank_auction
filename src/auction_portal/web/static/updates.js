@@ -95,7 +95,8 @@
         ? new Date(element.dataset.auctionEnd)
         : new Date(start.getTime() + 86400000);
       if (Number.isNaN(end.getTime())) end = new Date(start.getTime() + 86400000);
-      var status = now < start ? "upcoming" : now < end ? "live" : "closed";
+      var stillLive = element.dataset.auctionEnd ? now <= end : now < end;
+      var status = now < start ? "upcoming" : stillLive ? "live" : "closed";
       element.className = "status status-" + status;
       element.textContent = status;
     });

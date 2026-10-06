@@ -122,6 +122,9 @@ misleading and should be fixed before re-enabling schedules.
   Actual listing data still uses the existing 60-second version check and
   explicit Refresh / Not now notice; crawls update the database, not an
   already-rendered page automatically.
+- The search page has All auctions, Upcoming, Live, and Closed / passed tabs.
+  Tabs retain other filters, reset pagination, and the three time-based states
+  are filtered from auction dates rather than waiting for maintenance.
 - The portal avoids storing borrower/guarantor names and links listings back
   to their source notice. It includes disclaimers and possession/legal-process
   warnings.

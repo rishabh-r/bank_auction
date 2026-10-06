@@ -231,10 +231,47 @@ class SearchService:
             (query.city, Listing.city),
             (query.asset_type, Listing.asset_type),
             (query.possession, Listing.possession_type),
-            (query.status, Listing.status),
         ):
             if value:
                 stmt = stmt.where(column == value)
+
+        # These three public-facing statuses are derived from auction dates,
+        # just like Listing.effective_status. Filtering the stored status
+        # would leave an auction in the wrong tab until maintenance runs.
+        now = func.now()
+        active_status = Listing.status.notin_(
+            ("cancelled", "withdrawn", "stayed", "sold", "unknown")
+        )
+        if query.status == "upcoming":
+            stmt = stmt.where(active_status, Listing.auction_start_at > now)
+        elif query.status == "live":
+            stmt = stmt.where(
+                active_status,
+                Listing.auction_start_at.is_not(None),
+                Listing.auction_start_at <= now,
+                or_(
+                    Listing.auction_end_at >= now,
+                    (
+                        Listing.auction_end_at.is_(None)
+                        & (Listing.auction_start_at + func.make_interval(0, 0, 0, 1) > now)
+                    ),
+                ),
+            )
+        elif query.status == "closed":
+            stmt = stmt.where(
+                active_status,
+                Listing.auction_start_at.is_not(None),
+                Listing.auction_start_at <= now,
+                or_(
+                    Listing.auction_end_at < now,
+                    (
+                        Listing.auction_end_at.is_(None)
+                        & (Listing.auction_start_at + func.make_interval(0, 0, 0, 1) <= now)
+                    ),
+                ),
+            )
+        elif query.status:
+            stmt = stmt.where(Listing.status == query.status)
 
         if query.min_price is not None:
             stmt = stmt.where(Listing.reserve_price >= query.min_price)

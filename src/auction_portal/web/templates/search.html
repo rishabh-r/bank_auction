@@ -68,6 +68,15 @@
   </aside>
 
   <section class="results">
+    <nav class="status-tabs" aria-label="Filter auctions by status">
+      {% for value, label in [('all', 'All auctions'), ('upcoming', 'Upcoming'), ('live', 'Live'), ('closed', 'Closed / passed')] %}
+        {% set selected = (value == 'all' and not query.status) or query.status == value %}
+        <a class="status-tab {% if selected %}is-active{% endif %}"
+           href="?{{ build_query('status', none if value == 'all' else value) }}"
+           {% if selected %}aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+
     <div class="results-head">
       <p class="count">
         {% if results.total %}
